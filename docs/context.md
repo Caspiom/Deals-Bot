@@ -17,20 +17,22 @@
 
 ## 2. Stack Técnica e Dependências
 
-| Biblioteca | Versão Pinada | Responsabilidade |
-|---|---|---|
-| `httpx` | 0.27.0 | Cliente HTTP async para o scraper |
-| `beautifulsoup4` | 4.12.3 | Parsing de HTML das páginas de ofertas |
-| `lxml` | 5.2.2 | Parser rápido usado como backend do bs4 |
-| `python-telegram-bot` | 21.3 | Interface com a Telegram Bot API (async/v20+) |
-| `APScheduler` | 3.10.4 | Agendamento do loop de scraping (cron-like) |
-| `python-dotenv` | 1.0.1 | Carregamento de variáveis de ambiente via `.env` |
-| `loguru` | 0.7.2 | Logging estruturado com rotação de arquivos |
-| `tenacity` | 8.3.0 | Retries declarativos com backoff exponencial |
-| `sqlite3` | built-in | Filtro de duplicidade (dedup) — sem dependência externa |
-| `pytest` + `pytest-asyncio` | 8.2.2 / 0.23.7 | Testes unitários e assíncronos |
+**Gerenciador de pacotes:** `uv` (não pip). Usar sempre `uv add`, `uv sync`, `uv run`. O lock file é `uv.lock` (commitado). Não existe `requirements.txt` neste projeto.
 
-**Nota sobre Playwright:** A dependência `playwright` está preparada na arquitetura (via `BaseScraper`) mas **não está no `requirements.txt`** do MVP. Adicionar apenas quando o scraper-alvo exigir JavaScript.
+| Biblioteca | Versão Resolvida | Responsabilidade |
+|---|---|---|
+| `httpx` | 0.28.1 | Cliente HTTP async para o scraper |
+| `beautifulsoup4` | 4.15.0 | Parsing de HTML das páginas de ofertas |
+| `lxml` | 6.1.1 | Parser rápido usado como backend do bs4 |
+| `python-telegram-bot` | 22.8 | Interface com a Telegram Bot API (async/v20+) |
+| `APScheduler` | 3.11.2 | Agendamento do loop de scraping (cron-like) |
+| `python-dotenv` | 1.2.2 | Carregamento de variáveis de ambiente via `.env` |
+| `loguru` | 0.7.3 | Logging estruturado com rotação de arquivos |
+| `tenacity` | 9.1.4 | Retries declarativos com backoff exponencial |
+| `sqlite3` | built-in | Filtro de duplicidade (dedup) — sem dependência externa |
+| `pytest` + `pytest-asyncio` | 9.1.0 / 1.4.0 | Testes (grupo `dev`) |
+
+**Nota sobre Playwright:** Preparado na arquitetura via `BaseScraper`, mas não adicionado ao MVP. Usar `uv add playwright` apenas quando o scraper-alvo exigir JavaScript.
 
 ---
 
@@ -72,9 +74,12 @@ deals-bot/
 │   └── bot.log                 ← Gerado em runtime (no .gitignore)
 │
 ├── main.py                     ← Orquestrador / entry point
+├── conftest.py                 ← Injeta env vars mínimas para testes (sem .env)
+├── pyproject.toml              ← Dependências e metadados do projeto (uv)
+├── uv.lock                     ← Lock file gerado pelo uv (commitado)
+├── pytest.ini                  ← Config do pytest (testpaths, asyncio_mode, pythonpath)
 ├── .env                        ← Variáveis reais (no .gitignore, NUNCA commitado)
 ├── .env.example                ← Template de variáveis (commitado)
-├── requirements.txt
 └── .gitignore
 ```
 
@@ -102,17 +107,19 @@ APScheduler (a cada N minutos, configurado em SCRAPE_INTERVAL_MINUTES)
 
 ### Modelo de Dados — `Deal` (dataclass)
 
+Definido em `src/models.py`. O `discount_pct` é calculado automaticamente em `__post_init__` se `old_price` estiver disponível.
+
 ```python
 @dataclass
 class Deal:
     title: str
-    url: str                # URL original do produto
-    affiliate_url: str      # URL convertida (preenchida pelo AffiliateService)
-    price: float            # Preço atual
-    old_price: float | None # Preço antigo (None se não disponível)
-    discount_pct: int | None# Calculado automaticamente
+    url: str                 # URL original do produto
+    price: float             # Preço atual
+    old_price: float | None  # Preço antigo (None se não disponível)
+    discount_pct: int | None # Calculado em __post_init__ automaticamente
     image_url: str | None
-    source: str             # Ex: "pelando", "amazon", "mock"
+    source: str              # Ex: "pelando", "amazon", "mock"
+    affiliate_url: str       # Preenchida pelo AffiliateService (default "")
 ```
 
 ---
@@ -142,13 +149,15 @@ A Telegram Bot API limita a **30 mensagens/segundo** globais e **1 mensagem/segu
 ### 4.7 Logging Estruturado
 Toda saída de log passa pelo `loguru`. Proibido usar `print()` fora de scripts de debug pontuais. O logger é configurado uma vez em `src/utils/logger.py` e importado nos demais módulos.
 
+### 4.8 Isolamento de Testes via `conftest.py`
+O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`) antes da coleta do pytest. Isso mantém o Fail-Fast do `settings.py` em produção sem exigir um `.env` no CI ou ambiente de testes. `DedupFilter` aceita `db_path` opcional para usar banco em memória temporária (`tmp_path` do pytest) sem monkeypatching.
+
 ---
 
 ## 5. Estado Atual e Próximos Passos
 
-### ✅ Fase 1 — Estrutura Fundacional (CONCLUÍDA)
+### ✅ Fase 1 — Estrutura Fundacional (CONCLUÍDA — 2026-06-14)
 - [x] Estrutura de pastas criada (`src/`, `data/`, `logs/`, `docs/`)
-- [x] `requirements.txt` com todas as dependências pinadas
 - [x] `.env.example` documentado por categoria (Telegram, Afiliados, Scraper, DB, Logs)
 - [x] `.gitignore` configurado (protege `.env`, `deals.db`, logs, caches)
 - [x] `src/config/settings.py` carregando e tipando todas as variáveis de ambiente
@@ -156,17 +165,14 @@ Toda saída de log passa pelo `loguru`. Proibido usar `print()` fora de scripts 
 
 ---
 
-### 🔲 Fase 2 — Utilitários e Filtro de Duplicidade (PRÓXIMA)
-
-**Escopo exato:**
-
-| Arquivo | O que implementar |
-|---|---|
-| `src/utils/logger.py` | Configurar `loguru` com sink para arquivo (`logs/bot.log`) com rotação diária e sink para `stdout`. Nível controlado por `settings.LOG_LEVEL`. |
-| `src/utils/retry.py` | Criar decorator `telegram_retry` usando `tenacity`: 3 tentativas, `wait_exponential(min=2, max=30)`, logar cada tentativa falha. |
-| `src/services/dedup_filter.py` | Classe `DedupFilter`: inicializa o SQLite, cria tabela `seen_deals(url_hash, seen_at)`, métodos `is_new(deal) -> bool` e `mark_seen(deal)`, limpeza de TTL no `__init__`. |
-
-**Critério de conclusão da Fase 2:** Os três arquivos implementados e um teste rápido (pode ser um `if __name__ == "__main__"` ou `pytest`) confirmando que o dedup filtra corretamente um deal repetido.
+### ✅ Fase 2 — Utilitários e Filtro de Duplicidade (CONCLUÍDA — 2026-06-14)
+- [x] Migração de `pip` + `requirements.txt` para `uv` + `pyproject.toml` + `uv.lock`
+- [x] `src/models.py` — dataclass `Deal` com cálculo automático de `discount_pct`
+- [x] `src/utils/logger.py` — loguru com sink stdout + arquivo, rotação diária
+- [x] `src/utils/retry.py` — decorator `telegram_retry` (3 tentativas, backoff exponencial)
+- [x] `src/services/dedup_filter.py` — SQLite com SHA-256, TTL, `is_new()`, `mark_seen()`
+- [x] `conftest.py` — isolamento de testes sem `.env`
+- [x] `tests/test_dedup.py` — 6 testes, 0 warnings (`uv run pytest -v`)
 
 ---
 
