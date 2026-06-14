@@ -176,11 +176,12 @@ O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TO
 
 ---
 
-### 🔲 Fase 3 — Scrapers
+### ✅ Fase 3 — Scrapers (CONCLUÍDA — 2026-06-14)
+- [x] `src/scrapers/base_scraper.py` — ABC com método abstrato `async def fetch() -> list[Deal]`
+- [x] `src/scrapers/mock_scraper.py` — 12 produtos BR realistas, filtra por `MIN_DISCOUNT_PERCENT`, respeita `MAX_DEALS_PER_RUN`, simula latência de rede
+- [x] `tests/test_mock_scraper.py` — 5 testes async, 11/11 total passando
 
-**Escopo:**
-- `src/scrapers/base_scraper.py`: ABC com método abstrato `fetch()` e o dataclass `Deal`.
-- `src/scrapers/pelando_scraper.py`: Implementação concreta usando `httpx` + `bs4` para raspar o feed público do Pelando.com.br. Filtrar por `MIN_DISCOUNT_PERCENT`.
+**Decisão registrada:** Pelando e Promobit são SPAs JS-rendered (Next.js). Mercado Livre API exige OAuth. Scrapers reais precisam de Playwright — adiado para Fase 6. `MockScraper` garante que o pipeline completo pode ser testado sem dependência externa.
 
 ---
 
