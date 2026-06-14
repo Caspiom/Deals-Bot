@@ -1,0 +1,11 @@
+services:
+  deals-bot:
+    build: .
+    env_file: .env
+    volumes:
+      - ./data:/app/data   # persiste o SQLite entre restarts
+      - ./logs:/app/logs   # logs acessíveis no host
+    restart: unless-stopped
+    # limita uso de memória — Playwright + Chromium precisam de pelo menos 1GB
+    mem_limit: 1.5g
+    memswap_limit: 1.5g

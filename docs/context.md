@@ -193,6 +193,26 @@ O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TO
 
 ---
 
+### ✅ Fase 8 — Docker e Deploy (CONCLUÍDA — 2026-06-14)
+- [x] `Dockerfile` — python:3.12-slim + uv + Playwright Chromium; layers otimizados por ordem de cópia
+- [x] `docker-compose.yml` — bind mounts para `data/` e `logs/`, `restart: unless-stopped`, `mem_limit: 1.5g`
+- [x] `.dockerignore` — exclui `.env`, `.venv`, `tests/`, `data/`, `logs/`, `docs/`
+- [x] Build local validado: imagem 624MB (content), smoke test dentro do container OK
+- [ ] Deploy em produção (Hetzner / Fly.io / Oracle Cloud)
+
+**Plataformas recomendadas:** Hetzner CX22 (~R$ 25/mês, 2GB RAM) ou Fly.io (~R$ 30/mês, região GRU). Oracle Cloud Free Tier (0 custo, ARM, 1GB RAM) como opção gratuita. AWS descartada por custo/complexidade.
+
+**Comando de deploy:**
+```bash
+# Qualquer VPS com Docker instalado:
+git clone https://github.com/Caspiom/Deals-Bot.git
+cd Deals-Bot
+cp .env.example .env   # preencher credenciais
+docker compose up -d
+```
+
+---
+
 ### ✅ Fase 7 — Multi-Platform Publishers (CONCLUÍDA — 2026-06-14)
 - [x] `src/publishers/base_publisher.py` — ABC com `publish(deal)`
 - [x] `src/publishers/telegram_publisher.py` — migrado do telegram_poster.py

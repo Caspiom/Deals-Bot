@@ -1,0 +1,31 @@
+# Ambiente e segredos
+.env
+.venv/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testes e ferramentas de dev
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Dados de runtime (montados como volume)
+data/
+logs/
+
+# Git
+.git/
+.gitignore
+
+# Docs e contexto
+docs/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
