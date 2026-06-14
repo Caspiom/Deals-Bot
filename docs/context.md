@@ -32,7 +32,7 @@
 | `sqlite3` | built-in | Filtro de duplicidade (dedup) — sem dependência externa |
 | `pytest` + `pytest-asyncio` | 9.1.0 / 1.4.0 | Testes (grupo `dev`) |
 
-**Nota sobre Playwright:** Preparado na arquitetura via `BaseScraper`, mas não adicionado ao MVP. Usar `uv add playwright` apenas quando o scraper-alvo exigir JavaScript.
+**Nota sobre Playwright:** Adicionado ao projeto (`playwright==1.60.0`). Usado pelo `PelandoScraper`. `PromobitScraper` usa apenas `httpx` (API REST pública descoberta via interceptação de rede).
 
 ---
 
@@ -190,6 +190,18 @@ O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TO
 - [x] `src/services/telegram_poster.py` — card HTML com título, preço BRL formatado (`R$ 2.199,00`), desconto em %, botão inline de afiliado; `@telegram_retry` + rate limit de 1.1s
 - [x] `tests/test_affiliate.py` — 5 testes, `tests/test_telegram_poster.py` — 6 testes (Bot mockado com `AsyncMock`)
 - [x] 22/22 testes passando, zero warnings
+
+---
+
+### ✅ Fase 6 — Scrapers Reais: Pelando + Promobit (CONCLUÍDA — 2026-06-14)
+- [x] `src/scrapers/playwright_base_scraper.py` — base para scrapers com browser headless
+- [x] `src/scrapers/pelando_scraper.py` — Playwright: `a[data-deal-id]` + JS evaluate, parse BRL, extrai % do título
+- [x] `src/scrapers/promobit_scraper.py` — httpx puro: API REST pública `api.promobit.com.br/offers`, sem browser
+- [x] `tests/test_pelando_scraper.py` — 8 testes de parsing (sem Playwright)
+- [x] `tests/test_promobit_scraper.py` — 5 testes com httpx mockado
+- [x] 39/39 testes passando
+
+**Decisão registrada:** Promobit expõe API REST pública descoberta via interceptação de rede com Playwright — não precisa de browser para scraping. `offer_discont_percentage == 0` é recalculado via preços quando disponíveis. Pelando usa Playwright com `a[data-deal-id]` como âncora estável.
 
 ---
 
