@@ -11,6 +11,7 @@ from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
 from src.scrapers.pelando_scraper import PelandoScraper
 from src.scrapers.promobit_scraper import PromobitScraper
+from src.scrapers.mercadolivre_scraper import MercadoLivreScraper
 from src.services.affiliate import convert
 from src.services.dedup_filter import DedupFilter
 from src.publishers.base_publisher import BasePublisher
@@ -55,13 +56,15 @@ async def run_cycle(
         else:
             all_deals.extend(result)
 
-    new_deals = [d for d in all_deals if dedup.is_new(d)]
+    new_deals   = [d for d in all_deals if dedup.is_new(d)]
+    hot_reposts = [d for d in all_deals if not dedup.is_new(d) and dedup.can_repost(d)]
+    to_publish  = new_deals + hot_reposts
     logger.info(
-        "{} deal(s) coletado(s) — {} novo(s) → publicando em {} plataforma(s).",
-        len(all_deals), len(new_deals), len(publishers),
+        "{} deal(s) coletado(s) — {} novo(s), {} re-post(s) quente(s) → publicando em {} plataforma(s).",
+        len(all_deals), len(new_deals), len(hot_reposts), len(publishers),
     )
 
-    for deal in new_deals:
+    for deal in to_publish:
         deal.affiliate_url = convert(deal.url)
         for publisher in publishers:
             try:
@@ -76,7 +79,7 @@ async def run_cycle(
 async def main() -> None:
     logger.info("Deals Bot iniciando...")
 
-    scrapers: list[BaseScraper] = [PelandoScraper(), PromobitScraper()]
+    scrapers: list[BaseScraper] = [PelandoScraper(), PromobitScraper(), MercadoLivreScraper()]
     dedup = DedupFilter()
     publishers = _build_publishers()
 
