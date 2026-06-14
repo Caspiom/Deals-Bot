@@ -193,12 +193,11 @@ O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TO
 
 ---
 
-### 🔲 Fase 5 — Orquestrador e Finalização
-
-**Escopo:**
-- `main.py`: Instanciar todos os serviços, registrar o job no `APScheduler`, iniciar o loop.
-- Teste de integração ponta-a-ponta.
-- Instruções de deploy (systemd service ou Docker — a decidir).
+### ✅ Fase 5 — Orquestrador e Finalização (CONCLUÍDA — 2026-06-14)
+- [x] `main.py` — `run_cycle()` orquestra scraper → dedup → affiliate → poster; `AsyncIOScheduler` com execução imediata no startup; shutdown limpo no Ctrl+C
+- [x] `tests/test_integration.py` — 4 testes ponta-a-ponta: posts novos, dedup no 2º ciclo, affiliate_url preenchida, resiliência a falha de post
+- [x] 26/26 testes passando, zero warnings
+- [ ] Deploy (systemd service ou Docker) — a decidir
 
 ---
 
