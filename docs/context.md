@@ -185,11 +185,11 @@ O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TO
 
 ---
 
-### 🔲 Fase 4 — Serviços de Afiliado e Telegram
-
-**Escopo:**
-- `src/services/affiliate.py`: Função `convert(url: str) -> str` com lógica mockada para o MVP. Preparar a estrutura de `if "amazon" in url` / `if "magalu" in url` para futuras integrações reais.
-- `src/services/telegram_poster.py`: Formatar card com `HTML parse_mode` (título em negrito, preço em destaque, % de desconto, botão inline com link de afiliado). Aplicar retry e rate limiting.
+### ✅ Fase 4 — Serviços de Afiliado e Telegram (CONCLUÍDA — 2026-06-14)
+- [x] `src/services/affiliate.py` — `convert(url)` com rotas para Amazon (`tag=`), Magalu (`partner_id=`) e fallback shope.ee; usa `urllib.parse` para preservar params existentes
+- [x] `src/services/telegram_poster.py` — card HTML com título, preço BRL formatado (`R$ 2.199,00`), desconto em %, botão inline de afiliado; `@telegram_retry` + rate limit de 1.1s
+- [x] `tests/test_affiliate.py` — 5 testes, `tests/test_telegram_poster.py` — 6 testes (Bot mockado com `AsyncMock`)
+- [x] 22/22 testes passando, zero warnings
 
 ---
 
