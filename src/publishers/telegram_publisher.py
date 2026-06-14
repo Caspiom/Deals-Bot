@@ -4,22 +4,22 @@ from telegram.constants import ParseMode
 from loguru import logger
 from src.config.settings import TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID
 from src.models import Deal
-from src.utils.retry import telegram_retry
+from src.publishers.base_publisher import BasePublisher
+from src.utils.formatters import brl
+from src.utils.retry import publisher_retry
 
-_RATE_LIMIT_DELAY = 1.1  # Telegram: máx 1 msg/s por chat
-
-
-def _brl(value: float) -> str:
-    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+_RATE_LIMIT_DELAY = 1.1
 
 
-class TelegramPoster:
+class TelegramPublisher(BasePublisher):
+    name = "telegram"
+
     def __init__(self) -> None:
         self._bot = Bot(token=TELEGRAM_BOT_TOKEN)
         self._channel = TELEGRAM_CHANNEL_ID
 
-    @telegram_retry
-    async def send(self, deal: Deal) -> None:
+    @publisher_retry
+    async def publish(self, deal: Deal) -> None:
         caption = self._format_caption(deal)
         url = deal.affiliate_url or deal.url
         keyboard = InlineKeyboardMarkup([[
@@ -42,20 +42,15 @@ class TelegramPoster:
                 reply_markup=keyboard,
             )
 
-        logger.info("Postado no canal: {}", deal.title[:60])
+        logger.info("[Telegram] Publicado: {}", deal.title[:60])
         await asyncio.sleep(_RATE_LIMIT_DELAY)
 
     def _format_caption(self, deal: Deal) -> str:
         lines = [f"🔥 <b>{deal.title}</b>\n"]
-
         if deal.old_price:
-            lines.append(f"💰 De: <s>{_brl(deal.old_price)}</s>")
-
-        lines.append(f"🎯 Por: <b>{_brl(deal.price)}</b>")
-
+            lines.append(f"💰 De: <s>{brl(deal.old_price)}</s>")
+        lines.append(f"🎯 Por: <b>{brl(deal.price)}</b>")
         if deal.discount_pct:
             lines.append(f"🏷️ Desconto: <b>{deal.discount_pct}% OFF</b>")
-
         lines.append(f"\n📦 Fonte: {deal.source.capitalize()}")
-
         return "\n".join(lines)

@@ -11,9 +11,11 @@ def _log_retry(retry_state: RetryCallState) -> None:
     )
 
 
-telegram_retry = retry(
+publisher_retry = retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=30),
     before_sleep=_log_retry,
     reraise=True,
 )
+
+telegram_retry = publisher_retry  # alias de compatibilidade

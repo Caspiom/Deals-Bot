@@ -193,6 +193,20 @@ O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TO
 
 ---
 
+### ✅ Fase 7 — Multi-Platform Publishers (CONCLUÍDA — 2026-06-14)
+- [x] `src/publishers/base_publisher.py` — ABC com `publish(deal)`
+- [x] `src/publishers/telegram_publisher.py` — migrado do telegram_poster.py
+- [x] `src/publishers/x_publisher.py` — tweepy `AsyncClient` (requer `aiohttp`, `async-lru`)
+- [x] `src/publishers/instagram_publisher.py` — Graph API v20: container → publish (pula deals sem imagem)
+- [x] `src/utils/formatters.py` — `brl()` compartilhado entre publishers
+- [x] `ENABLED_PUBLISHERS` no `.env` controla quais plataformas estão ativas
+- [x] `main.py` — scrapers em paralelo (`asyncio.gather`) + publishers em loop por deal
+- [x] 50/50 testes passando, zero warnings
+
+**Decisão registrada:** WhatsApp excluído do escopo — Meta Cloud API não suporta broadcast nativo; soluções não-oficiais têm risco de ban. Instagram requer conta Business + Facebook Page. X tem free tier de 500 tweets/mês (suficiente para ~16 posts/dia).
+
+---
+
 ### ✅ Fase 6 — Scrapers Reais: Pelando + Promobit (CONCLUÍDA — 2026-06-14)
 - [x] `src/scrapers/playwright_base_scraper.py` — base para scrapers com browser headless
 - [x] `src/scrapers/pelando_scraper.py` — Playwright: `a[data-deal-id]` + JS evaluate, parse BRL, extrai % do título

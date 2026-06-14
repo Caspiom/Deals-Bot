@@ -4,44 +4,71 @@ from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
-import src.utils.logger  # noqa: F401 — aciona setup_logger() como efeito colateral
+import src.utils.logger  # noqa: F401 — aciona setup_logger()
 
-from src.config.settings import SCRAPE_INTERVAL_MINUTES
+from src.config.settings import SCRAPE_INTERVAL_MINUTES, ENABLED_PUBLISHERS
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
-from src.scrapers.mock_scraper import MockScraper
+from src.scrapers.pelando_scraper import PelandoScraper
+from src.scrapers.promobit_scraper import PromobitScraper
 from src.services.affiliate import convert
 from src.services.dedup_filter import DedupFilter
-from src.services.telegram_poster import TelegramPoster
+from src.publishers.base_publisher import BasePublisher
+from src.publishers.telegram_publisher import TelegramPublisher
+
+
+def _build_publishers() -> list[BasePublisher]:
+    publishers: list[BasePublisher] = []
+
+    if "telegram" in ENABLED_PUBLISHERS:
+        publishers.append(TelegramPublisher())
+
+    if "x" in ENABLED_PUBLISHERS:
+        from src.publishers.x_publisher import XPublisher
+        publishers.append(XPublisher())
+
+    if "instagram" in ENABLED_PUBLISHERS:
+        from src.publishers.instagram_publisher import InstagramPublisher
+        publishers.append(InstagramPublisher())
+
+    if not publishers:
+        raise RuntimeError("Nenhum publisher configurado. Verifique ENABLED_PUBLISHERS no .env.")
+
+    logger.info("Publishers ativos: {}", [p.name for p in publishers])
+    return publishers
 
 
 async def run_cycle(
-    scraper: BaseScraper,
+    scrapers: list[BaseScraper],
     dedup: DedupFilter,
-    poster: TelegramPoster,
+    publishers: list[BasePublisher],
 ) -> None:
-    logger.info(">>> Iniciando ciclo | scraper={}", scraper.name)
+    logger.info(">>> Iniciando ciclo | scrapers={}", [s.name for s in scrapers])
 
-    try:
-        deals: list[Deal] = await scraper.fetch()
-    except Exception as exc:
-        logger.error("Falha ao buscar deals: {}", exc)
-        return
+    # busca em todos os scrapers em paralelo
+    results = await asyncio.gather(*[s.fetch() for s in scrapers], return_exceptions=True)
 
-    new_deals = [d for d in deals if dedup.is_new(d)]
+    all_deals: list[Deal] = []
+    for scraper, result in zip(scrapers, results):
+        if isinstance(result, Exception):
+            logger.error("Scraper '{}' falhou: {}", scraper.name, result)
+        else:
+            all_deals.extend(result)
+
+    new_deals = [d for d in all_deals if dedup.is_new(d)]
     logger.info(
-        "Encontrados {} deal(s) — {} novo(s) para postar.",
-        len(deals),
-        len(new_deals),
+        "{} deal(s) coletado(s) — {} novo(s) → publicando em {} plataforma(s).",
+        len(all_deals), len(new_deals), len(publishers),
     )
 
     for deal in new_deals:
         deal.affiliate_url = convert(deal.url)
-        try:
-            await poster.send(deal)
-            dedup.mark_seen(deal)
-        except Exception as exc:
-            logger.error("Falha ao postar '{}': {}", deal.title[:50], exc)
+        for publisher in publishers:
+            try:
+                await publisher.publish(deal)
+            except Exception as exc:
+                logger.error("[{}] Falha ao publicar '{}': {}", publisher.name, deal.title[:40], exc)
+        dedup.mark_seen(deal)
 
     logger.info("<<< Ciclo concluído.")
 
@@ -49,17 +76,17 @@ async def run_cycle(
 async def main() -> None:
     logger.info("Deals Bot iniciando...")
 
-    scraper = MockScraper()
+    scrapers: list[BaseScraper] = [PelandoScraper(), PromobitScraper()]
     dedup = DedupFilter()
-    poster = TelegramPoster()
+    publishers = _build_publishers()
 
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         run_cycle,
         trigger="interval",
         minutes=SCRAPE_INTERVAL_MINUTES,
-        args=[scraper, dedup, poster],
-        next_run_time=datetime.now(),  # executa imediatamente no startup
+        args=[scrapers, dedup, publishers],
+        next_run_time=datetime.now(),
     )
     scheduler.start()
 

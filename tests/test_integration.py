@@ -1,10 +1,10 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 from src.models import Deal
 from src.scrapers.mock_scraper import MockScraper
 from src.services.dedup_filter import DedupFilter
-from src.services.telegram_poster import TelegramPoster
+from src.publishers.telegram_publisher import TelegramPublisher
 from main import run_cycle
 
 
@@ -37,72 +37,78 @@ def dedup(tmp_path):
 
 
 @pytest.fixture
-def poster():
-    with patch("src.services.telegram_poster.Bot") as mock_bot_class:
+def publisher():
+    with patch("src.publishers.telegram_publisher.Bot") as mock_bot_class:
         mock_bot = AsyncMock()
         mock_bot_class.return_value = mock_bot
         with patch("asyncio.sleep", new_callable=AsyncMock):
-            yield TelegramPoster(), mock_bot
+            yield TelegramPublisher(), mock_bot
 
 
 @pytest.mark.asyncio
-async def test_pipeline_posts_new_deals(dedup, poster):
-    """Deals novos devem ser postados no Telegram."""
-    p, bot = poster
+async def test_pipeline_posts_new_deals(dedup, publisher):
+    p, bot = publisher
     scraper = MockScraper()
     deals = _fixed_deals()
 
     with patch.object(scraper, "fetch", new=AsyncMock(return_value=deals)):
-        await run_cycle(scraper, dedup, p)
+        await run_cycle([scraper], dedup, [p])
 
-    total_posts = bot.send_photo.call_count + bot.send_message.call_count
-    assert total_posts == 2
+    assert bot.send_photo.call_count + bot.send_message.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_pipeline_deduplicates_on_second_run(dedup, poster):
-    """Deals já postados não devem ser postados novamente."""
-    p, bot = poster
+async def test_pipeline_deduplicates_on_second_run(dedup, publisher):
+    p, bot = publisher
     scraper = MockScraper()
     deals = _fixed_deals()
 
     with patch.object(scraper, "fetch", new=AsyncMock(return_value=deals)):
-        await run_cycle(scraper, dedup, p)  # 1º ciclo — posta 2 deals
+        await run_cycle([scraper], dedup, [p])
         bot.send_photo.reset_mock()
         bot.send_message.reset_mock()
-        await run_cycle(scraper, dedup, p)  # 2º ciclo — dedup filtra tudo
+        await run_cycle([scraper], dedup, [p])
 
-    total_posts = bot.send_photo.call_count + bot.send_message.call_count
-    assert total_posts == 0
+    assert bot.send_photo.call_count + bot.send_message.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_pipeline_affiliate_url_is_set(dedup, poster):
-    """Após o ciclo, deals devem ter affiliate_url preenchida."""
-    p, bot = poster
+async def test_pipeline_affiliate_url_is_set(dedup, publisher):
+    p, _ = publisher
     scraper = MockScraper()
     deals = _fixed_deals()
 
     with patch.object(scraper, "fetch", new=AsyncMock(return_value=deals)):
-        await run_cycle(scraper, dedup, p)
+        await run_cycle([scraper], dedup, [p])
 
-    assert deals[0].affiliate_url != ""
-    assert deals[1].affiliate_url != ""
+    assert all(d.affiliate_url for d in deals)
 
 
 @pytest.mark.asyncio
-async def test_pipeline_continues_after_post_failure(dedup, poster):
-    """Falha em um post não deve interromper os demais deals do ciclo."""
-    p, bot = poster
+async def test_pipeline_continues_after_post_failure(dedup, publisher):
+    p, bot = publisher
     scraper = MockScraper()
     deals = _fixed_deals()
 
-    # Primeiro send_photo levanta exceção, segundo deve ser chamado normalmente
     bot.send_photo.side_effect = [Exception("Timeout"), None]
 
     with patch.object(scraper, "fetch", new=AsyncMock(return_value=deals)):
-        await run_cycle(scraper, dedup, p)
+        await run_cycle([scraper], dedup, [p])
 
-    # send_photo foi chamado para o deal com imagem (falhou)
-    # send_message foi chamado para o deal sem imagem (sucesso)
     assert bot.send_message.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_pipeline_parallel_scrapers(dedup, publisher):
+    """Múltiplos scrapers em paralelo consolidam deals corretamente."""
+    p, bot = publisher
+    scraper_a = MockScraper()
+    scraper_b = MockScraper()
+    deals_a = [_fixed_deals()[0]]
+    deals_b = [_fixed_deals()[1]]
+
+    with patch.object(scraper_a, "fetch", new=AsyncMock(return_value=deals_a)), \
+         patch.object(scraper_b, "fetch", new=AsyncMock(return_value=deals_b)):
+        await run_cycle([scraper_a, scraper_b], dedup, [p])
+
+    assert bot.send_photo.call_count + bot.send_message.call_count == 2
