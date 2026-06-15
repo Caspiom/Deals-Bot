@@ -107,7 +107,9 @@ class TelegramPublisher(BasePublisher):
             lines.append(f"💰 De: <s>{brl(deal.old_price)}</s>")
         lines.append(f"🎯 Por: <b>{brl(deal.price)}</b>")
         if deal.discount_pct:
-            lines.append(f"🏷️ Desconto: <b>{deal.discount_pct}% OFF</b>")
+            pct = deal.discount_pct
+            badge = "⚡" if pct >= 70 else "🔥" if pct >= 50 else "💥" if pct >= 30 else "🏷️"
+            lines.append(f"{badge} Desconto: <b>{pct}% OFF</b>")
         if deal.installments and deal.installment_value:
             lines.append(f"💳 <b>{deal.installments}x de {brl(deal.installment_value)} sem juros</b>")
 
