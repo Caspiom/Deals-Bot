@@ -30,9 +30,10 @@
 | `loguru` | 0.7.3 | Logging estruturado com rotação de arquivos |
 | `tenacity` | 9.1.4 | Retries declarativos com backoff exponencial |
 | `sqlite3` | built-in | Filtro de duplicidade (dedup) — sem dependência externa |
+| `discord.py` | 2.7.1 | Bot do Discord (slash commands, embeds, multi-servidor) |
 | `pytest` + `pytest-asyncio` | 9.1.0 / 1.4.0 | Testes (grupo `dev`) |
 
-**Nota sobre Playwright:** Adicionado ao projeto (`playwright==1.60.0`). Usado pelo `PelandoScraper`. `PromobitScraper` usa apenas `httpx` (API REST pública descoberta via interceptação de rede).
+**Nota sobre Playwright:** Adicionado ao projeto (`playwright==1.60.0`). Usado pelo `PelandoScraper` e `MercadoLivreScraper`. `PromobitScraper` e `KabumScraper` usam apenas `httpx` (APIs REST públicas).
 
 ---
 
@@ -49,23 +50,37 @@ deals-bot/
 ├── src/
 │   ├── scrapers/
 │   │   ├── __init__.py
-│   │   ├── base_scraper.py     ← Contrato abstrato (interface)
-│   │   └── pelando_scraper.py  ← Implementação concreta (MVP)
+│   │   ├── base_scraper.py             ← Contrato abstrato (interface)
+│   │   ├── playwright_base_scraper.py  ← Base para scrapers com browser headless
+│   │   ├── mock_scraper.py             ← Scraper de teste com dados BR realistas
+│   │   ├── pelando_scraper.py          ← Playwright: feed do Pelando
+│   │   ├── promobit_scraper.py         ← httpx: API REST pública do Promobit
+│   │   ├── mercadolivre_scraper.py     ← Playwright: página de ofertas do ML
+│   │   └── kabum_scraper.py            ← httpx: API REST pública do KaBuM (6 categorias)
+│   │
+│   ├── publishers/
+│   │   ├── __init__.py
+│   │   ├── base_publisher.py           ← Contrato abstrato (interface)
+│   │   ├── telegram_publisher.py       ← Card HTML + botão inline + retry
+│   │   ├── x_publisher.py              ← Tweepy AsyncClient (500 tweets/mês free)
+│   │   ├── instagram_publisher.py      ← Graph API v20: container → publish
+│   │   └── discord_publisher.py        ← discord.py: bot multi-servidor com slash commands
 │   │
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── affiliate.py        ← Conversor de links (mockado no MVP)
-│   │   ├── telegram_poster.py  ← Worker de postagem com retry
-│   │   └── dedup_filter.py     ← Filtro de duplicidade via SQLite
+│   │   ├── affiliate.py                ← Conversor de links (Amazon, Magalu, shope.ee)
+│   │   ├── dedup_filter.py             ← Filtro SHA-256 + TTL + re-post de promos quentes
+│   │   └── guild_config.py             ← Configuração de canal por servidor Discord (SQLite)
 │   │
 │   ├── utils/
 │   │   ├── __init__.py
-│   │   ├── logger.py           ← Configuração global do loguru
-│   │   └── retry.py            ← Decorator de retry via tenacity
+│   │   ├── logger.py                   ← Configuração global do loguru
+│   │   ├── retry.py                    ← Decorator de retry via tenacity
+│   │   └── formatters.py              ← brl() compartilhado entre publishers
 │   │
 │   └── config/
 │       ├── __init__.py
-│       └── settings.py         ← Carrega .env e expõe constantes tipadas
+│       └── settings.py                 ← Carrega .env e expõe constantes tipadas
 │
 ├── data/
 │   └── deals.db                ← Gerado em runtime (SQLite, no .gitignore)
@@ -86,23 +101,25 @@ deals-bot/
 ### Fluxo de Dados
 
 ```
-APScheduler (a cada N minutos, configurado em SCRAPE_INTERVAL_MINUTES)
+APScheduler (a cada SCRAPE_INTERVAL_MINUTES)
         │
         ▼
-  PelandoScraper.fetch()
-        │  Retorna: List[Deal]  (dataclass com title, url, price, old_price, image_url, source)
+  asyncio.gather(scrapers)       ← Pelando, Promobit, MercadoLivre, KaBuM em paralelo
+        │  Retorna: List[Deal]
         ▼
-  DedupFilter.is_new(deal)      ← Consulta SQLite pelo hash SHA-256 da URL
+  dedup.is_new(deal)             ← Consulta SQLite pelo hash SHA-256 da URL
+  dedup.can_repost(deal)         ← Promo quente (≥ MIN_HOT_DISCOUNT_PCT) com
+        │                           last_posted_at > REPOST_INTERVAL_HOURS atrás
+        │ (novo ou re-post quente)   (já visto recentemente → descartado)
+        ▼
+  AffiliateService.convert(url)  ← Rotas: Amazon, Magalu, shope.ee (fallback)
         │
-        │ (novo)                 (já visto → descartado silenciosamente)
         ▼
-  AffiliateService.convert(url) ← Retorna URL de afiliado (mockada no MVP)
+  for publisher in publishers:   ← Telegram, X, Instagram, Discord (conforme ENABLED_PUBLISHERS)
+      publisher.publish(deal)    ← Retry com backoff exponencial via tenacity
         │
         ▼
-  TelegramPoster.send(deal)     ← Formata card HTML + posta via Bot API
-        │                          Retry com backoff exponencial via tenacity
-        ▼
-  DedupFilter.mark_seen(deal)   ← Salva hash no SQLite com timestamp
+  dedup.mark_seen(deal)          ← Atualiza last_posted_at (preserva seen_at original)
 ```
 
 ### Modelo de Dados — `Deal` (dataclass)
@@ -150,7 +167,13 @@ A Telegram Bot API limita a **30 mensagens/segundo** globais e **1 mensagem/segu
 Toda saída de log passa pelo `loguru`. Proibido usar `print()` fora de scripts de debug pontuais. O logger é configurado uma vez em `src/utils/logger.py` e importado nos demais módulos.
 
 ### 4.8 Isolamento de Testes via `conftest.py`
-O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`) antes da coleta do pytest. Isso mantém o Fail-Fast do `settings.py` em produção sem exigir um `.env` no CI ou ambiente de testes. `DedupFilter` aceita `db_path` opcional para usar banco em memória temporária (`tmp_path` do pytest) sem monkeypatching.
+O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`) antes da coleta do pytest. Isso mantém o Fail-Fast do `settings.py` em produção sem exigir um `.env` no CI ou ambiente de testes. `DedupFilter` e `GuildConfigStore` aceitam `db_path` opcional para usar banco em memória temporária (`tmp_path` do pytest) sem monkeypatching.
+
+### 4.9 Re-post de Promos Quentes
+Deals com `discount_pct >= MIN_HOT_DISCOUNT_PCT` (padrão 40%) são elegíveis para re-post se `now - last_posted_at >= REPOST_INTERVAL_HOURS` (padrão 2h). O `DedupFilter` rastreia dois timestamps distintos: `seen_at` (primeira vez, usado para TTL/expiração) e `last_posted_at` (último post, usado para intervalo de re-post). O `mark_seen()` usa UPSERT — preserva `seen_at` original e atualiza apenas `last_posted_at`.
+
+### 4.10 Discord Bot — Configuração por Servidor
+O `DiscordPublisher` não usa canal fixo. Cada servidor Discord configura seu próprio canal via slash command `/set-channel #canal` (requer permissão "Gerenciar Servidor"). A configuração `guild_id → channel_id` fica salva na tabela `discord_guild_channels` do mesmo `deals.db`. Ao entrar em novo servidor, o bot envia mensagem de boas-vindas explicando o setup. Se o canal configurado for deletado, o bot loga warning e pula o servidor sem travar os demais.
 
 ---
 
@@ -244,6 +267,44 @@ docker compose up -d
 - [x] `tests/test_integration.py` — 4 testes ponta-a-ponta: posts novos, dedup no 2º ciclo, affiliate_url preenchida, resiliência a falha de post
 - [x] 26/26 testes passando, zero warnings
 - [ ] Deploy (systemd service ou Docker) — a decidir
+
+---
+
+### ✅ Fase 9 — Re-post de Promos Quentes (CONCLUÍDA — 2026-06-14)
+- [x] `dedup_filter.py` — coluna `last_posted_at` adicionada com migração automática de DBs existentes
+- [x] `can_repost(deal)` — retorna `True` se `discount_pct >= MIN_HOT_DISCOUNT_PCT` e intervalo decorrido
+- [x] `mark_seen()` — UPSERT: preserva `seen_at` original, atualiza apenas `last_posted_at`
+- [x] `main.py` — `run_cycle()` publica `new_deals + hot_reposts` por ciclo
+- [x] `settings.py` — `MIN_HOT_DISCOUNT_PCT=40`, `REPOST_INTERVAL_HOURS=2`
+- [x] `tests/test_dedup.py` — 12 testes (6 novos para `can_repost` e comportamento do UPSERT)
+
+---
+
+### ✅ Fase 10 — Scraper KaBuM (CONCLUÍDA — 2026-06-14)
+- [x] `src/scrapers/kabum_scraper.py` — httpx puro, API REST pública `servicespub.prod.api.aws.grupokabum.com.br`
+- [x] Busca 6 categorias em paralelo: `hardware`, `perifericos`, `smartphones-tablets`, `computadores`, `games`, `tv-video`
+- [x] Deduplicação por `product_id` entre categorias; URL: `kabum.com.br/produto/{id}/{slug}`
+- [x] `tests/test_kabum_scraper.py` — 8 testes (filtros, mapeamento, dedup, cálculo de desconto, resiliência a falha de categoria)
+- [x] 76/76 testes passando
+
+**Decisão registrada:** Pichau (403 na API), Shopee (403), Zoom (Algolia, precisa de key), Cuponomia (403) e Buscapé (offline) investigados e descartados. KaBuM foi o único portal com API REST pública acessível sem autenticação além dos já existentes.
+
+---
+
+### ✅ Fase 11 — Publisher Discord (CONCLUÍDA — 2026-06-14)
+- [x] `src/publishers/discord_publisher.py` — `discord.py` 2.7.1; bot multi-servidor com `CommandTree`
+- [x] `src/services/guild_config.py` — `GuildConfigStore`: tabela `discord_guild_channels` no `deals.db`
+- [x] Slash commands (sync global via `tree.sync()` no `on_ready`):
+  - `/set-channel #canal` — configura canal do servidor (requer Gerenciar Servidor)
+  - `/remove-channel` — remove configuração
+  - `/help` — mostra comandos + status atual do canal configurado
+- [x] `on_guild_join` — mensagem de boas-vindas com instruções de setup
+- [x] Shutdown limpo: `close()` chamado no `finally` do `main.py`
+- [x] `DISCORD_BOT_TOKEN` no `.env`; ativado via `ENABLED_PUBLISHERS=discord`
+- [x] `tests/test_discord_publisher.py` + `tests/test_guild_config.py` — 17 testes
+- [x] 93/93 testes passando, zero warnings
+
+**Setup para novo servidor:** criar aplicação em discord.com/developers → Bot → copiar token. OAuth2 → URL Generator (scopes: `bot`, permissões: Send Messages, Embed Links, Attach Files, View Channels). Ao entrar no servidor, admin usa `/set-channel` para apontar o canal desejado.
 
 ---
 
