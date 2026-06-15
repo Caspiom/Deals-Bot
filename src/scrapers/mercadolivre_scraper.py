@@ -4,6 +4,7 @@ from loguru import logger
 from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
 from src.models import Deal
 from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
+from src.services.installment_calculator import parse_installment_string
 
 _OFFERS_URL = "https://www.mercadolivre.com.br/ofertas"
 
@@ -23,13 +24,15 @@ _EXTRACT_JS = """() => {
         for (const f of fractions) {
             if (!f.closest('s')) { curFraction = f; break; }
         }
+        const installEl = card.querySelector('[class*="installments"], [class*="poly-price__installments"]');
         return {
-            title:    titleEl?.innerText?.trim() ?? null,
-            url:      link?.href ?? null,
-            current:  curFraction?.innerText?.trim() ?? null,
-            original: strikeEl?.innerText?.trim() ?? null,
-            discount: discEl?.innerText?.trim() ?? null,
-            image:    imgEl?.src ?? null,
+            title:       titleEl?.innerText?.trim() ?? null,
+            url:         link?.href ?? null,
+            current:     curFraction?.innerText?.trim() ?? null,
+            original:    strikeEl?.innerText?.trim() ?? null,
+            discount:    discEl?.innerText?.trim() ?? null,
+            image:       imgEl?.src ?? null,
+            installment: installEl?.innerText?.trim() ?? null,
         };
     }).filter(item => item.title && item.url && item.current);
 }"""
@@ -83,6 +86,9 @@ class MercadoLivreScraper(PlaywrightBaseScraper):
 
             old_price = _parse_brl(item["original"]) if item.get("original") else None
 
+            parsed = parse_installment_string(item.get("installment") or "")
+            n_inst, v_inst = parsed if parsed else (None, None)
+
             deals.append(Deal(
                 title=item["title"],
                 url=url,
@@ -92,6 +98,8 @@ class MercadoLivreScraper(PlaywrightBaseScraper):
                 image_url=item.get("image"),
                 source=self.name,
                 store="Mercado Livre",
+                installments=n_inst,
+                installment_value=v_inst,
             ))
 
             if len(deals) >= MAX_DEALS_PER_RUN:

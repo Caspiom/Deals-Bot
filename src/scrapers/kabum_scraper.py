@@ -4,6 +4,7 @@ from loguru import logger
 from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
+from src.services.installment_calculator import parse_installment_string
 
 _API_BASE = "https://servicespub.prod.api.aws.grupokabum.com.br/catalog/v2/products-by-category"
 _PRODUCT_BASE = "https://www.kabum.com.br/produto"
@@ -92,6 +93,10 @@ class KabumScraper(BaseScraper):
                     image_url = imgs[0]
                     break
 
+            installment_raw = attr.get("max_installment") or ""
+            parsed = parse_installment_string(installment_raw) if installment_raw else None
+            n_inst, v_inst = parsed if parsed else (None, None)
+
             results.append((product_id, Deal(
                 title=attr.get("title", "").strip(),
                 url=url,
@@ -101,6 +106,8 @@ class KabumScraper(BaseScraper):
                 image_url=image_url,
                 source=self.name,
                 store="KaBuM",
+                installments=n_inst,
+                installment_value=v_inst,
             )))
 
         return results

@@ -39,6 +39,10 @@ SCRAPE_INTERVAL_MINUTES: int = int(os.getenv("SCRAPE_INTERVAL_MINUTES", "5"))
 MIN_DISCOUNT_PERCENT: int    = int(os.getenv("MIN_DISCOUNT_PERCENT", "15"))
 MAX_DEALS_PER_RUN: int       = int(os.getenv("MAX_DEALS_PER_RUN", "5"))
 
+# ── Parcelamento ─────────────────────────────────────────────────────────────
+# Quando o scraper não retornar dado real de parcelas, exibir estimativa calculada?
+SHOW_ESTIMATED_INSTALLMENTS: bool = os.getenv("SHOW_ESTIMATED_INSTALLMENTS", "false").lower() == "true"
+
 # ── Re-post ──────────────────────────────────────────────────────────────────
 # Deals com desconto >= HIGH_DISCOUNT_PCT: repost a cada REPOST_HIGH_HOURS horas.
 # Demais deals: repost a cada REPOST_LOW_HOURS horas.
