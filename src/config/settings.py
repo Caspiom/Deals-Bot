@@ -42,8 +42,11 @@ MAX_DEALS_PER_RUN: int       = int(os.getenv("MAX_DEALS_PER_RUN", "5"))
 # ── Re-post de promos quentes ─────────────────────────────────────────────────
 # Deals com desconto >= MIN_HOT_DISCOUNT_PCT são re-postados se o último post
 # foi há pelo menos REPOST_INTERVAL_HOURS horas.
-MIN_HOT_DISCOUNT_PCT: int   = int(os.getenv("MIN_HOT_DISCOUNT_PCT", "40"))
-REPOST_INTERVAL_HOURS: int  = int(os.getenv("REPOST_INTERVAL_HOURS", "2"))
+# Deals com desconto >= HIGH_DISCOUNT_PCT usam intervalo maior (HIGH_DISCOUNT_REPOST_HOURS).
+MIN_HOT_DISCOUNT_PCT: int        = int(os.getenv("MIN_HOT_DISCOUNT_PCT", "40"))
+REPOST_INTERVAL_HOURS: int       = int(os.getenv("REPOST_INTERVAL_HOURS", "2"))
+HIGH_DISCOUNT_PCT: int           = int(os.getenv("HIGH_DISCOUNT_PCT", "50"))
+HIGH_DISCOUNT_REPOST_HOURS: int  = int(os.getenv("HIGH_DISCOUNT_REPOST_HOURS", "12"))
 
 # ── Banco de dados ───────────────────────────────────────────────────────────
 DATABASE_PATH: Path  = BASE_DIR / os.getenv("DATABASE_PATH", "data/deals.db")

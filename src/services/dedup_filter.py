@@ -8,6 +8,8 @@ from loguru import logger
 from src.config.settings import (
     DATABASE_PATH,
     DEDUP_TTL_DAYS,
+    HIGH_DISCOUNT_PCT,
+    HIGH_DISCOUNT_REPOST_HOURS,
     MIN_HOT_DISCOUNT_PCT,
     REPOST_INTERVAL_HOURS,
 )
@@ -59,8 +61,13 @@ class DedupFilter:
         row = cur.fetchone()
         if row is None:
             return False
+        interval = (
+            HIGH_DISCOUNT_REPOST_HOURS
+            if deal.discount_pct >= HIGH_DISCOUNT_PCT
+            else REPOST_INTERVAL_HOURS
+        )
         last_posted = datetime.fromisoformat(row[0])
-        return datetime.now(UTC) - last_posted >= timedelta(hours=REPOST_INTERVAL_HOURS)
+        return datetime.now(UTC) - last_posted >= timedelta(hours=interval)
 
     def mark_seen(self, deal: Deal) -> None:
         now = datetime.now(UTC).isoformat()

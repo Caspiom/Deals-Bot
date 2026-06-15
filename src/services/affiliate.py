@@ -8,6 +8,8 @@ def convert(url: str) -> str:
         return _amazon(url)
     if "magazineluiza.com.br" in url or "magalu.com.br" in url:
         return _magalu(url)
+    if "mercadolivre.com.br" in url or "mercadolibre.com.br" in url:
+        return _mercadolivre(url)
     return _default(url)
 
 
@@ -19,6 +21,13 @@ def _amazon(url: str) -> str:
 
 
 def _magalu(url: str) -> str:
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+    params["partner_id"] = [AFFILIATE_ID]
+    return urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
+
+
+def _mercadolivre(url: str) -> str:
     parsed = urlparse(url)
     params = parse_qs(parsed.query, keep_blank_values=True)
     params["partner_id"] = [AFFILIATE_ID]
