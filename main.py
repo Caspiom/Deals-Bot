@@ -110,6 +110,9 @@ async def main() -> None:
     finally:
         scheduler.shutdown(wait=False)
         dedup.close()
+        for p in publishers:
+            if hasattr(p, "close"):
+                await p.close()
         logger.info("Bot encerrado.")
 
 
