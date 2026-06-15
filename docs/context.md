@@ -322,53 +322,16 @@ docker compose up -d
 
 ---
 
-### 🔲 Fase 13 — Módulo de Parcelamento (PLANEJADA)
+### ✅ Fase 13 — Módulo de Parcelamento (CONCLUÍDA — 2026-06-15)
+- [x] `src/services/installment_calculator.py` — `parse_installment_string()` para strings reais + `estimate()` por faixa de preço (mínimo R$50/parcela, máx 12x)
+- [x] KaBuM: campo `max_installment` já disponível na API como string — parseado diretamente
+- [x] MercadoLivre: extração do DOM via `[class*="installments"], [class*="poly-price__installments"]`
+- [x] Promobit/Pelando: sem dado real na API/DOM — estimativa ativada por `SHOW_ESTIMATED_INSTALLMENTS=true` no `.env` (padrão: desligado)
+- [x] `Deal.installments` e `Deal.installment_value` — preenchidos antes de publicar
+- [x] `TelegramPublisher` — linha `💳 Nx de R$ X,XX sem juros` exibida quando disponível
+- [x] `settings.py` — `SHOW_ESTIMATED_INSTALLMENTS` (bool, padrão `false`)
 
-**Objetivo:** Exibir na mensagem quantas vezes sem juros o produto pode ser parcelado, tornando o preço mais atraente visualmente. "12x de R$ 41,58 sem juros" converte muito mais do que só "R$ 499,00".
-
-**Exemplos de resultado esperado:**
-```
-🔥 Notebook Samsung Galaxy Book4
-
-tava na lista de desejos de muita gente 👀
-
-💰 De: R$ 3.499,00
-🎯 Por: R$ 2.799,00
-🏷️ Desconto: 20% OFF
-💳 12x de R$ 233,25 sem juros
-🏪 Loja: Samsung
-```
-
-**Abordagem planejada:**
-
-1. **Extração direta dos scrapers (prioridade)** — algumas fontes já retornam dado de parcelamento na API/DOM:
-   - KaBuM API: verificar campos `installment_count` e `installment_value` na resposta
-   - Promobit API: verificar `offer_installment` ou similar
-   - MercadoLivre DOM: elemento `[class*="installments"]` já visível na página de ofertas
-   - Pelando: menos provável, mas verificar
-
-2. **Cálculo estimado por faixa de preço (fallback)** — quando o scraper não retornar o dado, estimar com base em tabelas comuns do mercado brasileiro:
-   ```python
-   # Referência: maioria das lojas BR parcelam cartão sem juros até:
-   # < R$ 50    → à vista (sem parcela exibida)
-   # R$ 50-100  → 2x
-   # R$ 100-300 → 4x
-   # R$ 300-500 → 6x
-   # R$ 500-1k  → 10x
-   # > R$ 1k    → 12x
-   ```
-   Exibir com nota "(estimado)" ou simplesmente omitir se não houver dado real.
-
-3. **Decisão: mostrar estimativa ou só dado real?** — Mostrar estimativa com risco de estar errado vs. omitir e perder o apelo visual. **Recomendação:** mostrar só quando vier do scraper; faixa estimada apenas como fallback opcional via config (`SHOW_ESTIMATED_INSTALLMENTS=false` por padrão).
-
-**Arquivos a criar/modificar:**
-- `src/models.py` — campos `installments: int | None` e `installment_value: float | None` no Deal
-- `src/scrapers/kabum_scraper.py` — extrair parcelas da API se disponível
-- `src/scrapers/promobit_scraper.py` — extrair parcelas da API se disponível
-- `src/scrapers/mercadolivre_scraper.py` — extrair do DOM (`[class*="installments"]`)
-- `src/services/installment_calculator.py` — fallback de estimativa por faixa de preço
-- `src/publishers/telegram_publisher.py` — linha `💳 Nx de R$ X,XX sem juros` na mensagem
-- `src/config/settings.py` — `SHOW_ESTIMATED_INSTALLMENTS` (bool, padrão False)
+**Decisão registrada:** Promobit não retorna dado de parcelamento na API. KaBuM retorna `max_installment` como string (`"10x de R$ 280,00"`). Estimativa por faixa de preço desligada por padrão para não exibir dado impreciso.
 
 ---
 
