@@ -311,55 +311,64 @@ docker compose up -d
 
 ---
 
-### 🔲 Fase 12 — Módulo de Frases de Efeito / Copywriter (PLANEJADA)
+### ✅ Fase 12 — Módulo de Frases de Efeito / Copywriter (CONCLUÍDA — 2026-06-15)
+- [x] `src/services/category_classifier.py` — classifica produto em 9 categorias via regex no título
+- [x] `src/services/copywriter.py` — sorteia frase orgânica por categoria (tom casual, BR, sem marketing genérico)
+- [x] `Deal.tagline` — campo gerado uma vez antes de publicar, reutilizado por todos os publishers
+- [x] `TelegramPublisher` — exibe tagline entre título e preços
+- [x] `main.py` — chama `generate_tagline(deal)` no loop de publicação
 
-**Objetivo:** Gerar automaticamente uma frase de chamada personalizada para cada deal, tornando as mensagens mais humanas e persuasivas. Em vez de apenas listar título e preço, o bot vai contextualizar o produto — conectando-o a situações do cotidiano do comprador.
+**Decisão registrada:** Templates estáticos com variação aleatória por categoria. LLM (`claude-haiku-4-5`) planejado como evolução futura para produtos que não se encaixam nos padrões de regex. Frases no tom de "amigo mandando no grupo" — sem travessões, sem linguagem de marketing.
+
+---
+
+### 🔲 Fase 13 — Módulo de Parcelamento (PLANEJADA)
+
+**Objetivo:** Exibir na mensagem quantas vezes sem juros o produto pode ser parcelado, tornando o preço mais atraente visualmente. "12x de R$ 41,58 sem juros" converte muito mais do que só "R$ 499,00".
 
 **Exemplos de resultado esperado:**
-- Camisa social masculina → *"Parece que alguém vai arrasar na reunião de segunda! 👔"*
-- Kit 10 cuecas → *"Nunca mais fique sem cueca limpa na hora errada 😅"*
-- Nintendo Switch → *"Fim de semana que vem tem desculpa pra não sair de casa 🎮"*
-- Ketchup 1 litro → *"Churrasco, hambúrguer, batata frita — esse ketchup vai trabalhar muito 🍔"*
-- Aspirador robô → *"Porque varrer toda semana não é pra todo mundo 🤖"*
+```
+🔥 Notebook Samsung Galaxy Book4
+
+tava na lista de desejos de muita gente 👀
+
+💰 De: R$ 3.499,00
+🎯 Por: R$ 2.799,00
+🏷️ Desconto: 20% OFF
+💳 12x de R$ 233,25 sem juros
+🏪 Loja: Samsung
+```
 
 **Abordagem planejada:**
 
-1. **Classificação por categoria** — identificar a categoria do produto a partir do título/fonte (eletrônico, roupa, alimento, higiene, casa, etc.) usando palavras-chave ou regex simples.
+1. **Extração direta dos scrapers (prioridade)** — algumas fontes já retornam dado de parcelamento na API/DOM:
+   - KaBuM API: verificar campos `installment_count` e `installment_value` na resposta
+   - Promobit API: verificar `offer_installment` ou similar
+   - MercadoLivre DOM: elemento `[class*="installments"]` já visível na página de ofertas
+   - Pelando: menos provável, mas verificar
 
-2. **Templates por categoria** — conjunto de frases-template por categoria, com espaço para variação aleatória:
+2. **Cálculo estimado por faixa de preço (fallback)** — quando o scraper não retornar o dado, estimar com base em tabelas comuns do mercado brasileiro:
    ```python
-   TEMPLATES = {
-       "eletronico": ["Tecnologia no bolso por {price}!", ...],
-       "roupa": ["Visual novo sem gastar muito 👕", ...],
-       "alimento": ["Despensa cheia por {price} 🛒", ...],
-       ...
-   }
+   # Referência: maioria das lojas BR parcelam cartão sem juros até:
+   # < R$ 50    → à vista (sem parcela exibida)
+   # R$ 50-100  → 2x
+   # R$ 100-300 → 4x
+   # R$ 300-500 → 6x
+   # R$ 500-1k  → 10x
+   # > R$ 1k    → 12x
    ```
+   Exibir com nota "(estimado)" ou simplesmente omitir se não houver dado real.
 
-3. **Geração via LLM (evolução futura)** — quando o template não cobrir bem o produto, usar Claude (`claude-haiku-4-5`) como fallback para gerar uma frase contextual. Entrada: `title + category + price`. Saída: frase curta (1 linha, tom descontraído, emoji opcional).
-
-4. **Integração no pipeline** — novo serviço `src/services/copywriter.py` com método `generate(deal: Deal) -> str`. Chamado no `run_cycle()` antes do `publisher.publish()`. A frase entra no Deal ou é passada diretamente ao publisher.
-
-5. **Posicionamento na mensagem** — frase aparece logo abaixo do título, antes dos preços:
-   ```
-   🔥 Camisa Social Slim Fit Masculina
-   
-   👉 Visual novo sem gastar muito!
-   
-   💰 De: R$ 89,90
-   🎯 Por: R$ 44,95
-   🏷️ Desconto: 50% OFF
-   🏪 Loja: Amazon
-   ```
+3. **Decisão: mostrar estimativa ou só dado real?** — Mostrar estimativa com risco de estar errado vs. omitir e perder o apelo visual. **Recomendação:** mostrar só quando vier do scraper; faixa estimada apenas como fallback opcional via config (`SHOW_ESTIMATED_INSTALLMENTS=false` por padrão).
 
 **Arquivos a criar/modificar:**
-- `src/services/copywriter.py` — serviço principal com `generate(deal)`
-- `src/services/category_classifier.py` — identifica categoria por título/fonte
-- `src/models.py` — adicionar campo `tagline: str = ""` ao Deal
-- `src/publishers/telegram_publisher.py` — exibir `deal.tagline` na mensagem
-- `main.py` — chamar `copywriter.generate(deal)` antes de publicar
-
-**Decisão pendente:** Começar com templates estáticos (zero custo, zero latência) ou direto com LLM? Recomendação: templates para as 8–10 categorias mais comuns primeiro, LLM como fallback e evolução posterior.
+- `src/models.py` — campos `installments: int | None` e `installment_value: float | None` no Deal
+- `src/scrapers/kabum_scraper.py` — extrair parcelas da API se disponível
+- `src/scrapers/promobit_scraper.py` — extrair parcelas da API se disponível
+- `src/scrapers/mercadolivre_scraper.py` — extrair do DOM (`[class*="installments"]`)
+- `src/services/installment_calculator.py` — fallback de estimativa por faixa de preço
+- `src/publishers/telegram_publisher.py` — linha `💳 Nx de R$ X,XX sem juros` na mensagem
+- `src/config/settings.py` — `SHOW_ESTIMATED_INSTALLMENTS` (bool, padrão False)
 
 ---
 
