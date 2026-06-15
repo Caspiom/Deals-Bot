@@ -33,6 +33,10 @@ def _build_publishers() -> list[BasePublisher]:
         from src.publishers.instagram_publisher import InstagramPublisher
         publishers.append(InstagramPublisher())
 
+    if "discord" in ENABLED_PUBLISHERS:
+        from src.publishers.discord_publisher import DiscordPublisher
+        publishers.append(DiscordPublisher())
+
     if not publishers:
         raise RuntimeError("Nenhum publisher configurado. Verifique ENABLED_PUBLISHERS no .env.")
 

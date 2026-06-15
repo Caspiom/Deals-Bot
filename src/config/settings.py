@@ -27,6 +27,9 @@ X_ACCESS_SECRET: str  = os.getenv("X_ACCESS_SECRET", "")
 INSTAGRAM_ACCESS_TOKEN: str = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 INSTAGRAM_USER_ID: str      = os.getenv("INSTAGRAM_USER_ID", "")
 
+# ── Discord ───────────────────────────────────────────────────────────────────
+DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
+
 # ── Afiliados ────────────────────────────────────────────────────────────────
 AFFILIATE_ID: str         = os.getenv("AFFILIATE_ID", "MEU_ID_AFILIADO")
 AMAZON_ASSOCIATE_TAG: str = os.getenv("AMAZON_ASSOCIATE_TAG", "meutag-20")
