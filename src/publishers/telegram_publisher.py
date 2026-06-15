@@ -46,7 +46,11 @@ class TelegramPublisher(BasePublisher):
         await asyncio.sleep(_RATE_LIMIT_DELAY)
 
     def _format_caption(self, deal: Deal) -> str:
-        lines = [f"🔥 <b>{deal.title}</b>\n"]
+        lines = [f"🔥 <b>{deal.title}</b>"]
+        if deal.tagline:
+            lines.append(f"\n{deal.tagline}\n")
+        else:
+            lines.append("")
         if deal.old_price:
             lines.append(f"💰 De: <s>{brl(deal.old_price)}</s>")
         lines.append(f"🎯 Por: <b>{brl(deal.price)}</b>")

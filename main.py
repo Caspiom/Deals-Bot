@@ -14,6 +14,7 @@ from src.scrapers.promobit_scraper import PromobitScraper
 from src.scrapers.mercadolivre_scraper import MercadoLivreScraper
 from src.scrapers.kabum_scraper import KabumScraper
 from src.services.affiliate import convert
+from src.services.copywriter import generate as generate_tagline
 from src.services.dedup_filter import DedupFilter
 from src.publishers.base_publisher import BasePublisher
 from src.publishers.telegram_publisher import TelegramPublisher
@@ -71,6 +72,7 @@ async def run_cycle(
 
     for deal in to_publish:
         deal.affiliate_url = convert(deal.url)
+        deal.tagline = generate_tagline(deal)
         for publisher in publishers:
             try:
                 await publisher.publish(deal)

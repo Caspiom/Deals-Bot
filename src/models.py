@@ -11,6 +11,7 @@ class Deal:
     image_url: str | None = None
     source: str = "unknown"
     store: str = ""
+    tagline: str = ""
     affiliate_url: str = ""
 
     def __post_init__(self) -> None:
