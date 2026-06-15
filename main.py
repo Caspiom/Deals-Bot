@@ -59,9 +59,12 @@ async def run_cycle(
     all_deals: list[Deal] = []
     for scraper, result in zip(scrapers, results):
         if isinstance(result, Exception):
-            logger.error("Scraper '{}' falhou: {}", scraper.name, result)
+            logger.exception("Scraper '{}' falhou: {}", scraper.name, result)
         else:
             all_deals.extend(result)
+
+    # registra histórico de preço para TODOS os deals coletados (antes do filtro de dedup)
+    dedup.record_prices(all_deals)
 
     new_deals   = [d for d in all_deals if dedup.is_new(d)]
     hot_reposts = [d for d in all_deals if not dedup.is_new(d) and dedup.can_repost(d)]
@@ -74,15 +77,23 @@ async def run_cycle(
     for deal in to_publish:
         deal.affiliate_url = convert(deal.url)
         deal.tagline = generate_tagline(deal)
+        deal.is_price_low = dedup.is_lowest_price(deal)
         if deal.installments is None and SHOW_ESTIMATED_INSTALLMENTS:
             est = estimate_installments(deal.price)
             if est:
                 deal.installments, deal.installment_value = est
+        published_any = False
         for publisher in publishers:
             try:
                 await publisher.publish(deal)
+                published_any = True
             except Exception as exc:
                 logger.error("[{}] Falha ao publicar '{}': {}", publisher.name, deal.title[:40], exc)
+        if not published_any:
+            logger.warning(
+                "Deal marcado como visto apesar de falha em todos os publishers: {}",
+                deal.title[:60],
+            )
         dedup.mark_seen(deal)
 
     logger.info("<<< Ciclo concluído.")
@@ -102,6 +113,8 @@ async def main() -> None:
         minutes=SCRAPE_INTERVAL_MINUTES,
         args=[scrapers, dedup, publishers],
         next_run_time=datetime.now(),
+        max_instances=1,
+        misfire_grace_time=60,
     )
     scheduler.start()
 
