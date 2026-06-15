@@ -52,5 +52,6 @@ class TelegramPublisher(BasePublisher):
         lines.append(f"🎯 Por: <b>{brl(deal.price)}</b>")
         if deal.discount_pct:
             lines.append(f"🏷️ Desconto: <b>{deal.discount_pct}% OFF</b>")
-        lines.append(f"\n📦 Fonte: {deal.source.capitalize()}")
+        store = deal.store or deal.source.capitalize()
+        lines.append(f"\n🏪 Loja: {store}")
         return "\n".join(lines)

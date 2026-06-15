@@ -10,6 +10,7 @@ class Deal:
     discount_pct: int | None = None
     image_url: str | None = None
     source: str = "unknown"
+    store: str = ""
     affiliate_url: str = ""
 
     def __post_init__(self) -> None:

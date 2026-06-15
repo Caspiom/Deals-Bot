@@ -7,7 +7,7 @@ from src.scrapers.base_scraper import BaseScraper
 
 _API_BASE = "https://servicespub.prod.api.aws.grupokabum.com.br/catalog/v2/products-by-category"
 _PRODUCT_BASE = "https://www.kabum.com.br/produto"
-_CATEGORIES = ["hardware", "perifericos", "smartphones-tablets", "computadores", "games", "tv-video"]
+_CATEGORIES = ["hardware", "perifericos", "computadores"]
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
     "Origin": "https://www.kabum.com.br",
@@ -100,6 +100,7 @@ class KabumScraper(BaseScraper):
                 discount_pct=discount_pct,
                 image_url=image_url,
                 source=self.name,
+                store="KaBuM",
             )))
 
         return results

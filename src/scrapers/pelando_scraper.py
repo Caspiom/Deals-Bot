@@ -12,10 +12,11 @@ _FEED_URL = f"{_BASE_URL}"
 _EXTRACT_JS = """() => {
     const links = document.querySelectorAll('a[data-deal-id]');
     return Array.from(links).map(a => {
-        const root = a.closest('[class*="deal"]') || a.parentElement?.parentElement?.parentElement;
+        const root  = a.closest('[class*="deal"]') || a.parentElement?.parentElement?.parentElement;
         const img   = root?.querySelector('img[class*="deal-card-image"]');
         const price = root?.querySelector('[class*="deal-card-stamp"]');
         const temp  = root?.querySelector('[class*="deal-card-temperature"] span');
+        const storeEl = root?.querySelector('[class*="merchant"], [class*="store"], [class*="shop"]');
         return {
             title:      a.innerText.trim(),
             url:        a.href,
@@ -23,6 +24,7 @@ _EXTRACT_JS = """() => {
             price_text: price?.innerText ?? null,
             image:      img?.src ?? null,
             temp:       temp?.innerText ?? null,
+            store:      storeEl?.innerText?.trim() ?? null,
         };
     });
 }"""
@@ -88,6 +90,7 @@ class PelandoScraper(PlaywrightBaseScraper):
                 discount_pct=discount_pct,
                 image_url=item.get("image"),
                 source=self.name,
+                store=item.get("store") or "",
             ))
 
             if len(deals) >= MAX_DEALS_PER_RUN:

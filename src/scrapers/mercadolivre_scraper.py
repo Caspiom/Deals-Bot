@@ -91,6 +91,7 @@ class MercadoLivreScraper(PlaywrightBaseScraper):
                 discount_pct=discount_pct,
                 image_url=item.get("image"),
                 source=self.name,
+                store="Mercado Livre",
             ))
 
             if len(deals) >= MAX_DEALS_PER_RUN:

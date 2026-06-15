@@ -65,7 +65,7 @@ async def run_cycle(
     hot_reposts = [d for d in all_deals if not dedup.is_new(d) and dedup.can_repost(d)]
     to_publish  = new_deals + hot_reposts
     logger.info(
-        "{} deal(s) coletado(s) — {} novo(s), {} re-post(s) quente(s) → publicando em {} plataforma(s).",
+        "{} deal(s) coletado(s) — {} novo(s), {} re-post(s) → publicando em {} plataforma(s).",
         len(all_deals), len(new_deals), len(hot_reposts), len(publishers),
     )
 
