@@ -28,8 +28,7 @@ INSTAGRAM_ACCESS_TOKEN: str = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 INSTAGRAM_USER_ID: str      = os.getenv("INSTAGRAM_USER_ID", "")
 
 # ── Discord ───────────────────────────────────────────────────────────────────
-DISCORD_BOT_TOKEN: str    = os.getenv("DISCORD_BOT_TOKEN", "")
-DISCORD_CHANNEL_NAME: str = os.getenv("DISCORD_CHANNEL_NAME", "achadinhos")
+DISCORD_BOT_TOKEN: str = os.getenv("DISCORD_BOT_TOKEN", "")
 
 # ── Afiliados ────────────────────────────────────────────────────────────────
 AFFILIATE_ID: str         = os.getenv("AFFILIATE_ID", "MEU_ID_AFILIADO")
