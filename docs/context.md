@@ -135,7 +135,8 @@ class Deal:
     old_price: float | None  # Preço antigo (None se não disponível)
     discount_pct: int | None # Calculado em __post_init__ automaticamente
     image_url: str | None
-    source: str              # Ex: "pelando", "amazon", "mock"
+    source: str              # Ex: "pelando", "promobit", "kabum"
+    store: str               # Loja real do produto (ex: "Amazon", "KaBuM")
     affiliate_url: str       # Preenchida pelo AffiliateService (default "")
 ```
 
@@ -169,8 +170,8 @@ Toda saída de log passa pelo `loguru`. Proibido usar `print()` fora de scripts 
 ### 4.8 Isolamento de Testes via `conftest.py`
 O `conftest.py` na raiz injeta variáveis de ambiente mínimas (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`) antes da coleta do pytest. Isso mantém o Fail-Fast do `settings.py` em produção sem exigir um `.env` no CI ou ambiente de testes. `DedupFilter` e `GuildConfigStore` aceitam `db_path` opcional para usar banco em memória temporária (`tmp_path` do pytest) sem monkeypatching.
 
-### 4.9 Re-post de Promos Quentes
-Deals com `discount_pct >= MIN_HOT_DISCOUNT_PCT` (padrão 40%) são elegíveis para re-post se `now - last_posted_at >= REPOST_INTERVAL_HOURS` (padrão 2h). O `DedupFilter` rastreia dois timestamps distintos: `seen_at` (primeira vez, usado para TTL/expiração) e `last_posted_at` (último post, usado para intervalo de re-post). O `mark_seen()` usa UPSERT — preserva `seen_at` original e atualiza apenas `last_posted_at`.
+### 4.9 Re-post com Intervalo por Desconto
+Deals ainda ativos nos scrapers são elegíveis para re-post baseado no desconto: `discount_pct >= HIGH_DISCOUNT_PCT` (padrão 50%) → re-post a cada `REPOST_HIGH_HOURS` (padrão 24h); abaixo disso → `REPOST_LOW_HOURS` (padrão 48h). O `DedupFilter` rastreia dois timestamps distintos: `seen_at` (primeira vez, usado para TTL/expiração) e `last_posted_at` (último post, usado para intervalo de re-post). O `mark_seen()` usa UPSERT — preserva `seen_at` original e atualiza apenas `last_posted_at`. O hash de URL normaliza o path removendo query string e fragment, evitando falsos "novos" por parâmetros de tracking.
 
 ### 4.10 Discord Bot — Configuração por Servidor
 O `DiscordPublisher` não usa canal fixo. Cada servidor Discord configura seu próprio canal via slash command `/set-channel #canal` (requer permissão "Gerenciar Servidor"). A configuração `guild_id → channel_id` fica salva na tabela `discord_guild_channels` do mesmo `deals.db`. Ao entrar em novo servidor, o bot envia mensagem de boas-vindas explicando o setup. Se o canal configurado for deletado, o bot loga warning e pula o servidor sem travar os demais.
@@ -305,6 +306,60 @@ docker compose up -d
 - [x] 93/93 testes passando, zero warnings
 
 **Setup para novo servidor:** criar aplicação em discord.com/developers → Bot → copiar token. OAuth2 → URL Generator (scopes: `bot`, permissões: Send Messages, Embed Links, Attach Files, View Channels). Ao entrar no servidor, admin usa `/set-channel` para apontar o canal desejado.
+
+---
+
+---
+
+### 🔲 Fase 12 — Módulo de Frases de Efeito / Copywriter (PLANEJADA)
+
+**Objetivo:** Gerar automaticamente uma frase de chamada personalizada para cada deal, tornando as mensagens mais humanas e persuasivas. Em vez de apenas listar título e preço, o bot vai contextualizar o produto — conectando-o a situações do cotidiano do comprador.
+
+**Exemplos de resultado esperado:**
+- Camisa social masculina → *"Parece que alguém vai arrasar na reunião de segunda! 👔"*
+- Kit 10 cuecas → *"Nunca mais fique sem cueca limpa na hora errada 😅"*
+- Nintendo Switch → *"Fim de semana que vem tem desculpa pra não sair de casa 🎮"*
+- Ketchup 1 litro → *"Churrasco, hambúrguer, batata frita — esse ketchup vai trabalhar muito 🍔"*
+- Aspirador robô → *"Porque varrer toda semana não é pra todo mundo 🤖"*
+
+**Abordagem planejada:**
+
+1. **Classificação por categoria** — identificar a categoria do produto a partir do título/fonte (eletrônico, roupa, alimento, higiene, casa, etc.) usando palavras-chave ou regex simples.
+
+2. **Templates por categoria** — conjunto de frases-template por categoria, com espaço para variação aleatória:
+   ```python
+   TEMPLATES = {
+       "eletronico": ["Tecnologia no bolso por {price}!", ...],
+       "roupa": ["Visual novo sem gastar muito 👕", ...],
+       "alimento": ["Despensa cheia por {price} 🛒", ...],
+       ...
+   }
+   ```
+
+3. **Geração via LLM (evolução futura)** — quando o template não cobrir bem o produto, usar Claude (`claude-haiku-4-5`) como fallback para gerar uma frase contextual. Entrada: `title + category + price`. Saída: frase curta (1 linha, tom descontraído, emoji opcional).
+
+4. **Integração no pipeline** — novo serviço `src/services/copywriter.py` com método `generate(deal: Deal) -> str`. Chamado no `run_cycle()` antes do `publisher.publish()`. A frase entra no Deal ou é passada diretamente ao publisher.
+
+5. **Posicionamento na mensagem** — frase aparece logo abaixo do título, antes dos preços:
+   ```
+   🔥 Camisa Social Slim Fit Masculina
+   
+   👉 Visual novo sem gastar muito!
+   
+   💰 De: R$ 89,90
+   🎯 Por: R$ 44,95
+   🏷️ Desconto: 50% OFF
+   🏪 Loja: Amazon
+   ```
+
+**Arquivos a criar/modificar:**
+- `src/services/copywriter.py` — serviço principal com `generate(deal)`
+- `src/services/category_classifier.py` — identifica categoria por título/fonte
+- `src/models.py` — adicionar campo `tagline: str = ""` ao Deal
+- `src/publishers/telegram_publisher.py` — exibir `deal.tagline` na mensagem
+- `main.py` — chamar `copywriter.generate(deal)` antes de publicar
+
+**Decisão pendente:** Começar com templates estáticos (zero custo, zero latência) ou direto com LLM? Recomendação: templates para as 8–10 categorias mais comuns primeiro, LLM como fallback e evolução posterior.
 
 ---
 
