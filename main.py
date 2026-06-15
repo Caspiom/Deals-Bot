@@ -12,6 +12,7 @@ from src.scrapers.base_scraper import BaseScraper
 from src.scrapers.pelando_scraper import PelandoScraper
 from src.scrapers.promobit_scraper import PromobitScraper
 from src.scrapers.mercadolivre_scraper import MercadoLivreScraper
+from src.scrapers.kabum_scraper import KabumScraper
 from src.services.affiliate import convert
 from src.services.dedup_filter import DedupFilter
 from src.publishers.base_publisher import BasePublisher
@@ -79,7 +80,7 @@ async def run_cycle(
 async def main() -> None:
     logger.info("Deals Bot iniciando...")
 
-    scrapers: list[BaseScraper] = [PelandoScraper(), PromobitScraper(), MercadoLivreScraper()]
+    scrapers: list[BaseScraper] = [PelandoScraper(), PromobitScraper(), MercadoLivreScraper(), KabumScraper()]
     dedup = DedupFilter()
     publishers = _build_publishers()
 
