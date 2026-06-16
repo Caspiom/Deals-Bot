@@ -21,8 +21,7 @@ class KabumScraper(BaseScraper):
 
     @scraper_retry
     async def fetch(self) -> list[Deal]:
-        proxies = {"all://": PROXY_URL} if PROXY_URL else None
-        async with httpx.AsyncClient(headers=_HEADERS, timeout=15, proxies=proxies) as client:
+        async with httpx.AsyncClient(headers=_HEADERS, timeout=15, proxy=PROXY_URL or None) as client:
             resp = await client.get(
                 _API_URL,
                 params={

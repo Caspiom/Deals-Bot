@@ -72,9 +72,16 @@ class MagaluScraper(PlaywrightBaseScraper):
     async def _scrape(self, page: Page) -> list[Deal]:
         await page.goto(_OFFERS_URL, wait_until="domcontentloaded", timeout=30000)
 
-        # Aguarda pelo menos um link de produto aparecer antes de scrollar
+        # React precisa de tempo para hidratar após domcontentloaded.
+        # Tentamos networkidle por até 10s; se analytics travar, continuamos mesmo assim.
         try:
-            await page.wait_for_selector('a[href*="/p/"]', timeout=15000)
+            await page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            pass
+
+        # Aguarda pelo menos um link de produto aparecer
+        try:
+            await page.wait_for_selector('a[href*="/p/"]', timeout=20000)
         except Exception:
             logger.warning("Magalu: nenhum link de produto encontrado — possível bloqueio ou DOM vazio.")
             return []

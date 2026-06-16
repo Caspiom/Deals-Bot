@@ -165,8 +165,7 @@ class AmazonScraper(BaseScraper):
         body = json.dumps(payload)
         headers = _signed_headers(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, body)
 
-        proxies = {"all://": PROXY_URL} if PROXY_URL else None
-        async with httpx.AsyncClient(timeout=15, proxies=proxies) as client:
+        async with httpx.AsyncClient(timeout=15, proxy=PROXY_URL or None) as client:
             resp = await client.post(_ENDPOINT, content=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()

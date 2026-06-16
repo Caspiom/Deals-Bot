@@ -70,8 +70,7 @@ class AliExpressScraper(BaseScraper):
         }
         params["sign"] = _sign(params, ALIEXPRESS_SECRET_KEY)
 
-        proxies = {"all://": PROXY_URL} if PROXY_URL else None
-        async with httpx.AsyncClient(timeout=20, proxies=proxies) as client:
+        async with httpx.AsyncClient(timeout=20, proxy=PROXY_URL or None) as client:
             resp = await client.post(_API_URL, data=params)
             resp.raise_for_status()
             data = resp.json()
