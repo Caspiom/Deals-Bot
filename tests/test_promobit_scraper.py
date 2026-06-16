@@ -123,3 +123,39 @@ async def test_fetch_calculates_pct_from_prices_when_api_returns_zero(scraper, m
 
     assert len(deals) == 1
     assert deals[0].discount_pct == 40
+
+
+@pytest.mark.asyncio
+async def test_fetch_extracts_coupon_code(scraper):
+    offer_with_coupon = {
+        "offer_id": 3001,
+        "offer_title": "Smartphone Xiaomi 14T 256GB",
+        "offer_slug": "xiaomi-14t-3001",
+        "offer_price": 2199.00,
+        "offer_old_price": 3499.00,
+        "offer_discont_percentage": 37,
+        "offer_photo": "/mock_xiaomi.png",
+        "offer_coupon": "XIAOMI15",
+    }
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"offers": [offer_with_coupon]}
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("src.scrapers.promobit_scraper.httpx.AsyncClient") as cls:
+        client = AsyncMock()
+        client.get = AsyncMock(return_value=mock_resp)
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+        cls.return_value = client
+
+        deals = await scraper.fetch()
+
+    assert len(deals) == 1
+    assert deals[0].coupon_code == "XIAOMI15"
+
+
+@pytest.mark.asyncio
+async def test_fetch_coupon_none_when_absent(scraper, mock_api):
+    deals = await scraper.fetch()
+    for deal in deals:
+        assert deal.coupon_code is None

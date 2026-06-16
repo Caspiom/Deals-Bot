@@ -158,4 +158,8 @@ class DiscordPublisher(BasePublisher):
         lines.append(f"🎯 Por: **{brl(deal.price)}**")
         if deal.discount_pct:
             lines.append(f"🏷️ **{deal.discount_pct}% OFF**")
+        if deal.coins_discount_value:
+            lines.append(f"🪙 Com moedas sai por: **{brl(deal.coins_discount_value)}**")
+        if deal.coupon_code:
+            lines.append(f"🎟️ Cupom: `{deal.coupon_code}`")
         return "\n".join(lines)

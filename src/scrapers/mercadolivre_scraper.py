@@ -25,6 +25,8 @@ _EXTRACT_JS = """() => {
             if (!f.closest('s')) { curFraction = f; break; }
         }
         const installEl = card.querySelector('[class*="installments"], [class*="poly-price__installments"]');
+        const couponEl  = card.querySelector('[class*="coupon"], [class*="cupom"], [data-testid*="coupon"]');
+        const coinsEl   = card.querySelector('[class*="coins"], [class*="moedas"], [class*="poly-coins"]');
         return {
             title:       titleEl?.innerText?.trim() ?? null,
             url:         link?.href ?? null,
@@ -33,6 +35,8 @@ _EXTRACT_JS = """() => {
             discount:    discEl?.innerText?.trim() ?? null,
             image:       imgEl?.src ?? null,
             installment: installEl?.innerText?.trim() ?? null,
+            coupon:      couponEl?.innerText?.trim() ?? null,
+            coins:       coinsEl?.innerText?.trim() ?? null,
         };
     }).filter(item => item.title && item.url && item.current);
 }"""
@@ -89,6 +93,9 @@ class MercadoLivreScraper(PlaywrightBaseScraper):
             parsed = parse_installment_string(item.get("installment") or "")
             n_inst, v_inst = parsed if parsed else (None, None)
 
+            coupon_code = (item.get("coupon") or "").strip() or None
+            coins_val = _parse_brl(item.get("coins") or "") if item.get("coins") else None
+
             deals.append(Deal(
                 title=item["title"],
                 url=url,
@@ -100,6 +107,8 @@ class MercadoLivreScraper(PlaywrightBaseScraper):
                 store="Mercado Livre",
                 installments=n_inst,
                 installment_value=v_inst,
+                coupon_code=coupon_code,
+                coins_discount_value=coins_val,
             ))
 
             if len(deals) >= MAX_DEALS_PER_RUN:

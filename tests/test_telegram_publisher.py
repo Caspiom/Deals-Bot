@@ -65,3 +65,26 @@ def test_format_caption_shows_brl_format(publisher):
     caption = p._format_caption(_deal())
     assert "R$ 2.199,00" in caption
     assert "R$ 2.899,00" in caption
+
+
+def test_format_caption_shows_coupon_code(publisher):
+    p, _ = publisher
+    deal = _deal()
+    deal.coupon_code = "SHOPEE10"
+    assert "SHOPEE10" in p._format_caption(deal)
+
+
+def test_format_caption_shows_coins_discount(publisher):
+    p, _ = publisher
+    deal = _deal()
+    deal.coins_discount_value = 1999.00
+    caption = p._format_caption(deal)
+    assert "moedas" in caption.lower()
+    assert "R$ 1.999,00" in caption
+
+
+def test_format_caption_omits_coupon_coins_when_absent(publisher):
+    p, _ = publisher
+    caption = p._format_caption(_deal())
+    assert "Cupom" not in caption
+    assert "moedas" not in caption.lower()

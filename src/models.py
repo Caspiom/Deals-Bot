@@ -14,6 +14,8 @@ class Deal:
     tagline: str = ""
     installments: int | None = None
     installment_value: float | None = None
+    coupon_code: str | None = None
+    coins_discount_value: float | None = None
     affiliate_url: str = ""
     is_price_low: bool = False
 

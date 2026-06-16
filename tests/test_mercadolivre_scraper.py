@@ -147,3 +147,27 @@ async def test_scrape_includes_deal_without_discount_text(scraper):
     deals = await scraper._scrape(page)
     assert len(deals) == 1
     assert deals[0].discount_pct is None
+
+
+@pytest.mark.asyncio
+async def test_scrape_extracts_coupon_code(scraper):
+    card = {**_MOCK_CARDS[0], "coupon": "DESCONTO10"}
+    page = _make_page_mock([card])
+    deals = await scraper._scrape(page)
+    assert deals[0].coupon_code == "DESCONTO10"
+
+
+@pytest.mark.asyncio
+async def test_scrape_extracts_coins_discount_value(scraper):
+    card = {**_MOCK_CARDS[0], "coins": "2.199"}
+    page = _make_page_mock([card])
+    deals = await scraper._scrape(page)
+    assert deals[0].coins_discount_value == 2199.0
+
+
+@pytest.mark.asyncio
+async def test_scrape_coupon_none_when_absent(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
+    for deal in deals:
+        assert deal.coupon_code is None
+        assert deal.coins_discount_value is None

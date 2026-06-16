@@ -84,7 +84,8 @@ def test_can_repost_false_when_interval_not_elapsed(dedup):
 def test_can_repost_true_when_interval_elapsed(dedup):
     deal = _deal("https://example.com/produto/elapsed", discount_pct=50)
     dedup.mark_seen(deal)
-    past = (datetime.now(UTC) - timedelta(hours=3)).isoformat()
+    # REPOST_HIGH_HOURS default = 24h; usamos 25h para garantir que o intervalo passou
+    past = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
     dedup._conn.execute(
         "UPDATE seen_deals SET last_posted_at = ? WHERE url_hash = ?",
         (past, dedup._hash(deal.url)),
@@ -97,8 +98,8 @@ def test_mark_seen_updates_last_posted_at(dedup):
     deal = _deal("https://example.com/produto/update", discount_pct=50)
     dedup.mark_seen(deal)
 
-    # simula que a primeira postagem foi há 3h
-    past = (datetime.now(UTC) - timedelta(hours=3)).isoformat()
+    # simula que a primeira postagem foi há 25h (> REPOST_HIGH_HOURS=24)
+    past = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
     dedup._conn.execute(
         "UPDATE seen_deals SET last_posted_at = ? WHERE url_hash = ?",
         (past, dedup._hash(deal.url)),

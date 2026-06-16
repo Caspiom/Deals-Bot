@@ -112,6 +112,10 @@ class TelegramPublisher(BasePublisher):
             lines.append(f"{badge} Desconto: <b>{pct}% OFF</b>")
         if deal.installments and deal.installment_value:
             lines.append(f"💳 <b>{deal.installments}x de {brl(deal.installment_value)} sem juros</b>")
+        if deal.coins_discount_value:
+            lines.append(f"🪙 Com moedas sai por: <b>{brl(deal.coins_discount_value)}</b>")
+        if deal.coupon_code:
+            lines.append(f"🎟️ Cupom: <code>{deal.coupon_code}</code>")
 
         store = deal.store or deal.source.capitalize()
         lines.append(f"\n🏪 Loja: {store}")

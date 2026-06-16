@@ -46,10 +46,11 @@ class PromobitScraper(BaseScraper):
             if api_pct < MIN_DISCOUNT_PERCENT:
                 continue
 
-            slug      = offer.get("offer_slug", "")
-            photo     = offer.get("offer_photo", "")
-            image_url = f"{_IMAGE_BASE}{photo}" if photo and not photo.startswith("http") else photo
-            store     = offer.get("store_name") or offer.get("merchant_name") or ""
+            slug        = offer.get("offer_slug", "")
+            photo       = offer.get("offer_photo", "")
+            image_url   = f"{_IMAGE_BASE}{photo}" if photo and not photo.startswith("http") else photo
+            store       = offer.get("store_name") or offer.get("merchant_name") or ""
+            coupon_code = (offer.get("offer_coupon") or "").strip() or None
 
             deals.append(Deal(
                 title=offer.get("offer_title", "").strip(),
@@ -60,6 +61,7 @@ class PromobitScraper(BaseScraper):
                 image_url=image_url or None,
                 source=self.name,
                 store=store,
+                coupon_code=coupon_code,
             ))
 
             if len(deals) >= MAX_DEALS_PER_RUN:

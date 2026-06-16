@@ -335,6 +335,36 @@ docker compose up -d
 
 ---
 
+### ✅ Fase 14 — Esquema de Cupons e Moedas (CONCLUÍDA — 2026-06-16)
+- [x] Mapeado o comportamento de cupons e moedas nos scrapers existentes: MercadoLivre (DOM via Playwright), Promobit (campo `offer_coupon` da API) e Pelando (badge de cupom no DOM).
+- [x] `src/models.py` — campos opcionais `coupon_code: str | None` e `coins_discount_value: float | None` adicionados ao dataclass `Deal`.
+- [x] `MercadoLivreScraper` — `_EXTRACT_JS` estendido com seletores `[class*="coupon"]` e `[class*="coins"]`; Python mapeia para os novos campos.
+- [x] `PromobitScraper` — extrai `offer_coupon` da resposta da API defensivamente.
+- [x] `PelandoScraper` — `_EXTRACT_JS` estendido com seletor `[class*="coupon"]`.
+- [x] `TelegramPublisher` — exibe `🎟️ Cupom: <code>CÓDIGO</code>` e `🪙 Com moedas sai por: R$ X,XX` quando presentes.
+- [x] `DiscordPublisher` — exibe os mesmos campos em markdown Discord.
+- [x] `tests/test_dedup.py` — corrigido bug pré-existente nos testes de repost (intervalo era 3h mas threshold padrão é 24h).
+- [x] 101/101 testes passando, zero warnings.
+
+---
+
+### 🔲 Fase 15 — Módulo de API REST (Este Repositório)
+- [ ] Desenvolver uma API RESTful leve (usando um framework assíncrono como FastAPI ou Sanic) dentro deste repositório (estruturada em `src/api/`).
+- [ ] Expor os dados minerados e deduplicados do banco SQLite para consumo externo, garantindo endpoints para Deals ativos com paginação, busca por categorias, tags e filtros de desconto real.
+- [ ] Isolar as rotas da API para servir puramente como o provider de payloads JSON que os clientes externos vão consumir.
+
+**Direcionamento estratégico:** Este repositório funciona como Engine de Mineração e API provedora de dados. O Frontend Web e o Aplicativo Mobile serão desenvolvidos em repositórios separados e independentes que consomem esta API.
+
+---
+
+### 🔲 Fase 16 — Ecossistema Externo (Novos Repositórios Separáveis)
+- [ ] Planejar o desenvolvimento de um novo projeto/repositório para a Plataforma Web (Frontend em Next.js/React, inspirado em catálogo de vendas, otimizado para SEO) que consome a API JSON deste backend.
+- [ ] Planejar o desenvolvimento de um novo projeto/repositório para o Aplicativo Android nativo ou híbrido (focado em notificações push em tempo real de bugs e promoções), consumindo os mesmos endpoints unificados.
+
+**Direcionamento estratégico:** O objetivo de longo prazo é ser a infraestrutura que alimenta múltiplos clientes externos — não apenas publishers de redes sociais. Cada cliente externo é um projeto independente que integra via API REST (Fase 15).
+
+---
+
 ## 6. Convenções de Atualização deste Arquivo
 
 - **Ao concluir uma fase:** Mover o item de `🔲` para `✅` e adicionar a data de conclusão.
