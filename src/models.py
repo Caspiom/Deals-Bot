@@ -18,6 +18,7 @@ class Deal:
     coins_discount_value: float | None = None
     affiliate_url: str = ""
     is_price_low: bool = False
+    tax_note: str | None = None
 
     def __post_init__(self) -> None:
         if (

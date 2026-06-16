@@ -11,6 +11,9 @@ from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
 from src.scrapers.mercadolivre_scraper import MercadoLivreScraper
 from src.scrapers.kabum_scraper import KabumScraper
+from src.scrapers.aliexpress_scraper import AliExpressScraper
+from src.scrapers.amazon_scraper import AmazonScraper
+from src.scrapers.magalu_scraper import MagaluScraper
 from src.services.affiliate import convert, is_commissionable
 from src.services.copywriter import generate as generate_tagline
 from src.services.installment_calculator import estimate as estimate_installments
@@ -107,7 +110,13 @@ async def main() -> None:
     logger.info("Deals Bot iniciando...")
 
     # Apenas scrapers de lojas diretas — ver diretriz 4.11 em docs/context.md
-    scrapers: list[BaseScraper] = [MercadoLivreScraper(), KabumScraper()]
+    scrapers: list[BaseScraper] = [
+        MercadoLivreScraper(),
+        KabumScraper(),
+        MagaluScraper(),
+        AliExpressScraper(),
+        AmazonScraper(),
+    ]
     dedup = DedupFilter()
     publishers = _build_publishers()
 

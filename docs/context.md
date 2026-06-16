@@ -33,7 +33,7 @@
 | `discord.py` | 2.7.1 | Bot do Discord (slash commands, embeds, multi-servidor) |
 | `pytest` + `pytest-asyncio` | 9.1.0 / 1.4.0 | Testes (grupo `dev`) |
 
-**Nota sobre Playwright:** Adicionado ao projeto (`playwright==1.60.0`). Usado pelo `PelandoScraper` e `MercadoLivreScraper`. `PromobitScraper` e `KabumScraper` usam apenas `httpx` (APIs REST públicas).
+**Nota sobre Playwright:** Adicionado ao projeto (`playwright==1.60.0`). Usado pelo `PelandoScraper` e `MercadoLivreScraper`. `PromobitScraper`, `KabumScraper` e `AliExpressScraper` usam apenas `httpx` (APIs REST públicas).
 
 ---
 
@@ -56,7 +56,10 @@ deals-bot/
 │   │   ├── pelando_scraper.py          ← Playwright: feed do Pelando
 │   │   ├── promobit_scraper.py         ← httpx: API REST pública do Promobit
 │   │   ├── mercadolivre_scraper.py     ← Playwright: página de ofertas do ML
-│   │   └── kabum_scraper.py            ← httpx: API REST pública do KaBuM (6 categorias)
+│   │   ├── kabum_scraper.py            ← httpx: API REST pública do KaBuM
+│   │   ├── magalu_scraper.py           ← Playwright: busca por desconto ordenada por -percentual_desconto
+│   │   ├── aliexpress_scraper.py       ← httpx: AliExpress Portals API (HMAC-MD5, preço local c/ impostos BR)
+│   │   └── amazon_scraper.py           ← httpx: Amazon PA API v5 (AWS Signature v4, multi-categoria)
 │   │
 │   ├── publishers/
 │   │   ├── __init__.py
@@ -104,15 +107,18 @@ deals-bot/
 APScheduler (a cada SCRAPE_INTERVAL_MINUTES)
         │
         ▼
-  asyncio.gather(scrapers)       ← Pelando, Promobit, MercadoLivre, KaBuM em paralelo
+  asyncio.gather(scrapers)       ← MercadoLivre, KaBuM, Magalu, AliExpress, Amazon em paralelo (lojas diretas)
         │  Retorna: List[Deal]
+        ▼
+  is_commissionable(url)         ← Descarta URLs de agregadores (diretriz 4.11)
+        │
         ▼
   dedup.is_new(deal)             ← Consulta SQLite pelo hash SHA-256 da URL
   dedup.can_repost(deal)         ← Promo quente (≥ MIN_HOT_DISCOUNT_PCT) com
         │                           last_posted_at > REPOST_INTERVAL_HOURS atrás
         │ (novo ou re-post quente)   (já visto recentemente → descartado)
         ▼
-  AffiliateService.convert(url)  ← Rotas: Amazon, Magalu, shope.ee (fallback)
+  AffiliateService.convert(url)  ← Rotas: Amazon, Magalu, ML; AliExpress já vem com tracking na URL
         │
         ▼
   for publisher in publishers:   ← Telegram, X, Instagram, Discord (conforme ENABLED_PUBLISHERS)
@@ -130,14 +136,21 @@ Definido em `src/models.py`. O `discount_pct` é calculado automaticamente em `_
 @dataclass
 class Deal:
     title: str
-    url: str                 # URL original do produto
-    price: float             # Preço atual
-    old_price: float | None  # Preço antigo (None se não disponível)
-    discount_pct: int | None # Calculado em __post_init__ automaticamente
+    url: str                         # URL original do produto (ou promotionLink para AliExpress)
+    price: float                     # Preço atual (com impostos se local_sale_price disponível)
+    old_price: float | None          # Preço antigo (None se não disponível)
+    discount_pct: int | None         # Calculado em __post_init__ automaticamente
     image_url: str | None
-    source: str              # Ex: "pelando", "promobit", "kabum"
-    store: str               # Loja real do produto (ex: "Amazon", "KaBuM")
-    affiliate_url: str       # Preenchida pelo AffiliateService (default "")
+    source: str                      # Ex: "kabum", "mercadolivre", "aliexpress"
+    store: str                       # Loja real do produto (ex: "Amazon", "KaBuM", "AliExpress")
+    tagline: str                     # Frase de efeito gerada pelo copywriter (default "")
+    installments: int | None         # Número de parcelas (real ou estimado)
+    installment_value: float | None  # Valor por parcela
+    coupon_code: str | None          # Cupom de desconto quando disponível
+    coins_discount_value: float | None  # Preço com moedas/cashback (MercadoLivre)
+    affiliate_url: str               # Preenchida pelo AffiliateService antes de publicar (default "")
+    is_price_low: bool               # True se for o menor preço nos últimos 30 dias
+    tax_note: str | None             # Nota de imposto de importação (ex: AliExpress com impostos BR)
 ```
 
 ---
@@ -185,11 +198,11 @@ O `DiscordPublisher` não usa canal fixo. Cada servidor Discord configura seu pr
 
 | Loja | Status | Programa de Afiliado | Observação |
 |---|---|---|---|
-| Amazon | ✅ Integrado | Amazon Associados (`tag=`) | Tag `achadin09c587-20` configurada |
+| Amazon | ✅ Integrado | Amazon Associados PA API v5 | Tag `achadin09c587-20`; requer `AMAZON_ACCESS_KEY` + `AMAZON_SECRET_KEY` |
 | Mercado Livre | ✅ Integrado | Parceiros ML (`partner_id=`) | Scraper Playwright ativo |
-| Magazine Luiza | ✅ Integrado | Parceiros Magalu (`partner_id=`) | Via `affiliate.py` |
+| Magazine Luiza | ✅ Integrado | Parceiros Magalu (`partner_id=`) | Scraper Playwright ativo; `affiliate.py` injeta `partner_id` |
 | KaBuM | ✅ Scraper ativo | Awin Brasil / Lomadee | URL direta; integração afiliado pendente |
-| AliExpress | 🔲 Pendente | Programa AliExpress Portals | Credenciais já no `.env` |
+| AliExpress | ✅ Integrado | Programa AliExpress Portals (Portals API) | `promotionLink` com tracking; `localSalePrice` com impostos BR |
 | Shopee | 🔲 Pendente | Shopee Affiliates | Scraper pendente |
 | Casas Bahia | 🔲 Pendente | Awin Brasil | Produto de volume alto; scraper viável |
 | Netshoes | 🔲 Pendente | Lomadee / Awin | Forte em calçados e esportes |
@@ -373,6 +386,56 @@ docker compose up -d
 - [x] `DiscordPublisher` — exibe os mesmos campos em markdown Discord.
 - [x] `tests/test_dedup.py` — corrigido bug pré-existente nos testes de repost (intervalo era 3h mas threshold padrão é 24h).
 - [x] 101/101 testes passando, zero warnings.
+
+---
+
+### ✅ Fase 14.5 — Filtro de Monetização + Scraper AliExpress (CONCLUÍDA — 2026-06-16)
+
+**Filtro de monetização (diretriz 4.11):**
+- [x] `src/services/affiliate.py` — `_AGGREGATOR_DOMAINS` frozenset + `is_commissionable(url)`: descarta URLs de Promobit, Pelando, Zoom, Buscapé, Meliuz e similares
+- [x] `main.py` — `PromobitScraper` e `PelandoScraper` removidos da lista ativa; filtro `is_commissionable()` aplicado como segunda barreira antes da fila de publicação
+- [x] `src/services/affiliate.py` — bug corrigido: `_default()` retornava placeholder `shope.ee/exemplo` para todas as lojas sem integração; agora retorna a URL original intacta
+- [x] `tests/test_affiliate.py` — 12 casos de teste para `is_commissionable()` (lojas diretas passam, agregadores bloqueiam)
+
+**Scraper AliExpress:**
+- [x] `src/scrapers/aliexpress_scraper.py` — AliExpress Portals API (`api-sg.aliexpress.com/sync`), método `aliexpress.affiliate.hotproduct.query`, autenticação HMAC-MD5
+- [x] Usa `localSalePrice` / `localOriginalPrice` da API — preço calculado pelo próprio AliExpress já com II (20%) + ICMS (variável por estado) para o Brasil; fallback para `sale_price` se campos locais ausentes
+- [x] `promotionLink` da resposta já embute o `tracking_id` — nenhuma manipulação de URL necessária; `convert()` retorna a URL intacta via `_default()`
+- [x] `Deal.tax_note` — novo campo opcional; preenchido com aviso de impostos incluídos quando `local_sale_price` está disponível
+- [x] `TelegramPublisher` e `DiscordPublisher` — exibem `tax_note` quando presente
+- [x] `settings.py` — `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_SECRET_KEY`, `ALIEXPRESS_TRACKING_ID`
+- [x] `main.py` — `AliExpressScraper` adicionado à lista ativa de scrapers
+- [x] `tests/test_aliexpress_scraper.py` — 12 testes (parsing de preço, assinatura, filtros, fallback sem credenciais, fallback sem local_price, erro de API)
+- [x] 119/119 testes passando, zero warnings
+
+**Decisão registrada:** AliExpress não expõe URL de produto direta via DOM público — usa a API oficial de afiliados (Portals). O campo `local_sale_price` retorna o preço correto para o Brasil (Remessa Conforme) evitando cálculo manual impreciso de 44%. Compras internacionais são marcadas explicitamente com `tax_note` para transparência ao usuário.
+
+---
+
+### ✅ Fase 14.6 — Scraper Amazon PA API (CONCLUÍDA — 2026-06-16)
+- [x] `src/scrapers/amazon_scraper.py` — Amazon Product Advertising API v5; autenticação AWS Signature v4 (HMAC-SHA256) implementada manualmente sem dependência do SDK
+- [x] Busca em 4 categorias em paralelo: `Electronics`, `Computers`, `Wireless`, `HomeAndKitchen`; parâmetro `MinSavingPercent` garante que só chegam produtos com desconto real
+- [x] Deduplicação por ASIN entre categorias no mesmo ciclo; resiliência a falha de categoria individual (as demais continuam)
+- [x] `DetailPageURL` da resposta já embute `?tag=achadin09c587-20`; `affiliate.py._amazon()` aplica tag novamente de forma idempotente (sem duplicação)
+- [x] `settings.py` — `AMAZON_ACCESS_KEY` e `AMAZON_SECRET_KEY` adicionados; `.env.example` atualizado com instruções
+- [x] `main.py` — `AmazonScraper` adicionado à lista ativa
+- [x] `tests/test_amazon_scraper.py` — 17 testes (assinatura SigV4, parse de campos, fallback de URL, filtros, dedup por ASIN, resiliência a falha de categoria)
+- [x] 136/136 testes passando, zero warnings
+
+---
+
+### ✅ Fase 14.7 — Scraper Magazine Luiza (CONCLUÍDA — 2026-06-16)
+- [x] `src/scrapers/magalu_scraper.py` — Playwright; URL `/busca/desconto/?ordenacao=-percentual_desconto&tipo=oferta` garante os maiores descontos primeiro
+- [x] JS extractor com seletores por `data-testid` (mais estáveis) + fallback em padrão de classe do Luizalabs design system
+- [x] `_parse_brl()` lida com espaço não-quebrável (`\xa0`) no formato `R$\xa01.299,90`; imagens placeholder base64 (lazy loading) são descartadas
+- [x] Parcelamento extraído via `parse_installment_string()` quando disponível no card
+- [x] Dedup por URL sem query string (remove `?partner_id=...&utm=...` antes de comparar)
+- [x] `affiliate.py._magalu()` injeta `partner_id` no momento da publicação — scraper retorna URL limpa
+- [x] `main.py` — `MagaluScraper` adicionado à lista ativa
+- [x] `tests/test_magalu_scraper.py` — 18 testes (parse BRL, parse %, campos, parcelamento, dedup, imagem lazy, max deals)
+- [x] 154/154 testes passando, zero warnings
+
+**Decisão registrada:** PA API exige credenciais separadas do `ASSOCIATE_TAG` (obtidas em associados.amazon.com.br → Ferramentas → API de Publicidade). O scraper ignora graciosamente quando `AMAZON_ACCESS_KEY` não está configurado. A PA API tem rate limit de ~1 req/s e exige mínimo de 3 vendas qualificadas em 180 dias para manter acesso.
 
 ---
 

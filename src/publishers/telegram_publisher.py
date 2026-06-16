@@ -117,6 +117,9 @@ class TelegramPublisher(BasePublisher):
         if deal.coupon_code:
             lines.append(f"🎟️ Cupom: <code>{deal.coupon_code}</code>")
 
+        if deal.tax_note:
+            lines.append(f"\n{deal.tax_note}")
+
         store = deal.store or deal.source.capitalize()
         lines.append(f"\n🏪 Loja: {store}")
         lines.append(f"📡 Via: {deal.source.capitalize()}")
