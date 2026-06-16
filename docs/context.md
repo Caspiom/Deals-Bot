@@ -191,6 +191,17 @@ Deals ainda ativos nos scrapers são elegíveis para re-post baseado no desconto
 ### 4.10 Discord Bot — Configuração por Servidor
 O `DiscordPublisher` não usa canal fixo. Cada servidor Discord configura seu próprio canal via slash command `/set-channel #canal` (requer permissão "Gerenciar Servidor"). A configuração `guild_id → channel_id` fica salva na tabela `discord_guild_channels` do mesmo `deals.db`. Ao entrar em novo servidor, o bot envia mensagem de boas-vindas explicando o setup. Se o canal configurado for deletado, o bot loga warning e pula o servidor sem travar os demais.
 
+### 4.12 Estratégia de Afiliado — Interpolação de String como Fallback Global
+
+**Decisão:** O `AffiliateService` usa manipulação direta de URL (regex + reconstrução de string) como estratégia principal de injeção de tag de afiliado. Chamadas a SDKs ou APIs REST de afiliados ficam restritas a casos onde são obrigatórias (ex: AliExpress Portals API, que embute o tracking na `promotionLink`).
+
+**Motivação:** APIs de afiliado (Amazon PA API, Magalu API) exigem credenciais, aprovação de parceiro e têm rate limits. A interpolação de string é zero-dependency, zero-latência e funciona para qualquer URL da loja — mesmo quando as APIs estão inacessíveis ou o programa de afiliado não está ativo ainda.
+
+**Padrão por loja:**
+- **Amazon:** extrai ASIN via `/dp/([A-Z0-9]{10})` e reconstrói `amazon.com.br/dp/{ASIN}?tag={tag}` — URL canônica sem parâmetros de tracking (`/ref=...`, `?ref=...`)
+- **Magalu/ML/Shopee:** `urllib.parse` injeta `partner_id=` ou `af_id=` preservando params existentes
+- **Lojas sem programa ativo (KaBuM etc.):** URL original retornada intacta via `_default(url)`
+
 ### 4.11 Filtro de Monetização — Proibido Dar Comissão a Agregadores
 **DIRETRIZ DE MONETIZAÇÃO:** O bot NÃO DEVE dar comissão de graça para agregadores concorrentes. É estritamente proibido enviar para os cards finais do Telegram ofertas cujos links finais pertençam ou passem pelo redirecionamento de agregadores terceiros (como Promobit e Pelando), pois a comissão fica para eles.
 
@@ -200,7 +211,7 @@ O `DiscordPublisher` não usa canal fixo. Cada servidor Discord configura seu pr
 
 | Loja | Status | Programa de Afiliado | Observação |
 |---|---|---|---|
-| Amazon | ✅ Integrado | Amazon Associados PA API v5 | Tag `achadin09c587-20`; requer `AMAZON_ACCESS_KEY` + `AMAZON_SECRET_KEY` |
+| Amazon | ✅ Integrado | Amazon Associados (tag injetada via regex) | Playwright raspa `/deals`; ASIN extraído por regex; PA API removida |
 | Mercado Livre | ✅ Integrado | Parceiros ML (`partner_id=`) | Scraper Playwright ativo |
 | Magazine Luiza | ✅ Integrado | Parceiros Magalu (`partner_id=`) | Scraper Playwright ativo; `affiliate.py` injeta `partner_id` |
 | KaBuM | ✅ Scraper ativo | Awin Brasil / Lomadee | URL direta; integração afiliado pendente |
@@ -414,15 +425,20 @@ docker compose up -d
 
 ---
 
-### ✅ Fase 14.6 — Scraper Amazon PA API (CONCLUÍDA — 2026-06-16)
-- [x] `src/scrapers/amazon_scraper.py` — Amazon Product Advertising API v5; autenticação AWS Signature v4 (HMAC-SHA256) implementada manualmente sem dependência do SDK
-- [x] Busca em 4 categorias em paralelo: `Electronics`, `Computers`, `Wireless`, `HomeAndKitchen`; parâmetro `MinSavingPercent` garante que só chegam produtos com desconto real
-- [x] Deduplicação por ASIN entre categorias no mesmo ciclo; resiliência a falha de categoria individual (as demais continuam)
-- [x] `DetailPageURL` da resposta já embute `?tag=achadin09c587-20`; `affiliate.py._amazon()` aplica tag novamente de forma idempotente (sem duplicação)
-- [x] `settings.py` — `AMAZON_ACCESS_KEY` e `AMAZON_SECRET_KEY` adicionados; `.env.example` atualizado com instruções
-- [x] `main.py` — `AmazonScraper` adicionado à lista ativa
-- [x] `tests/test_amazon_scraper.py` — 17 testes (assinatura SigV4, parse de campos, fallback de URL, filtros, dedup por ASIN, resiliência a falha de categoria)
-- [x] 136/136 testes passando, zero warnings
+### ✅ Fase 14.6 — Scraper Amazon (CONCLUÍDA — 2026-06-16, migrado em 2026-06-16)
+
+**Versão original (PA API — descontinuada):**
+- Implementação com Amazon PA API v5 + AWS Signature v4 manual descontinuada por inacessibilidade de credenciais e rate limit rígido de 1 req/s
+
+**Versão atual (HTML scraping via Playwright):**
+- [x] `src/scrapers/amazon_scraper.py` — herdado de `PlaywrightBaseScraper`; raspa `amazon.com.br/deals` (Ofertas do Dia); âncora em `a[href*="/dp/"]`; usa `.a-offscreen` para preços (mais confiável que parsear whole+fraction)
+- [x] ASIN extraído por regex `/dp/([A-Z0-9]{10})/` no JS extractor; dedup por ASIN no Python
+- [x] `affiliate.py._amazon()` reescrito: extrai ASIN via regex, reconstrói URL canônica `amazon.com.br/dp/{ASIN}?tag={tag}` — elimina `/ref=...` e tracking poluído
+- [x] `AMAZON_ACCESS_KEY` e `AMAZON_SECRET_KEY` removidos de `settings.py` e `.env.example` — não necessários
+- [x] `tests/test_amazon_scraper.py` — 14 testes (parse BRL, parse discount, mapeamento de campos, dedup, filtros, resiliência a item inválido)
+- [x] 169/169 testes passando, zero warnings
+
+**Decisão registrada:** PA API exige credenciais de associado com ≥3 vendas qualificadas nos últimos 180 dias para manter acesso ativo. Scraping HTML da `/deals` não tem essa restrição — funciona imediatamente e sem chaves. A estratégia de interpolação de string para afiliado (diretriz 4.12) torna a PA API desnecessária.
 
 ---
 
@@ -479,6 +495,14 @@ docker compose up -d
 - Amazon mantém `asyncio.gather` para scrapers httpx mas serializa as 6 categorias da PA API — requests paralelos à PA API geram 429 imediato
 - Proxy configurado uma vez no `PlaywrightBaseScraper` e nos clientes `httpx` via `PROXY_URL` — não exige mudança nos scrapers individuais
 - Shopee Flash Sale (`/flash_sale`) como fonte primária: produtos com 40-80% de desconto real vs buscas por `popular` que não têm critério de desconto
+
+---
+
+### ✅ Fase 14.10 — Motor de Afiliados Completo + Guia de Proxy (CONCLUÍDA — 2026-06-16)
+- [x] `src/services/affiliate.py` — `_amazon()` reescrito com extração de ASIN por regex e reconstrução de URL canônica (diretriz 4.12)
+- [x] `docs/proxy_setup.md` — guia técnico completo: motivação (soft-blocks por IP de datacenter), formatos de `PROXY_URL`, tabela de provedores por custo/eficácia, validação de IP via httpx e Playwright, troubleshooting
+- [x] `docs/context.md` — diretriz 4.12 registrada; tabela de lojas atualizada; fase 14.6 migrada para refletir mudança de PA API → HTML scraping
+- [x] 169/169 testes passando, zero warnings
 
 ---
 

@@ -1,39 +1,64 @@
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
-from src.scrapers.amazon_scraper import AmazonScraper, _signed_headers, _signing_key
+from unittest.mock import AsyncMock
+from src.scrapers.amazon_scraper import AmazonScraper, _parse_brl, _parse_discount_pct
 from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── dados de teste ────────────────────────────────────────────────────────────
 
-def _make_item(
-    asin: str = "B001",
-    title: str = "Produto Teste",
-    price: float = 100.0,
-    old_price: float = 200.0,
-    discount_pct: int = 50,
-    image: str | None = "https://m.media-amazon.com/images/I/test.jpg",
-    url: str = "https://www.amazon.com.br/dp/B001?tag=achadin09c587-20",
-) -> dict:
-    item: dict = {
-        "ASIN": asin,
-        "DetailPageURL": url,
-        "ItemInfo": {"Title": {"DisplayValue": title}},
-        "Offers": {
-            "Listings": [
-                {
-                    "Price": {"Amount": price, "Currency": "BRL"},
-                    "SavingBasis": {"Amount": old_price, "Percentage": discount_pct},
-                }
-            ]
-        },
-    }
-    if image:
-        item["Images"] = {"Primary": {"Medium": {"URL": image}}}
-    return item
+_MOCK_CARDS = [
+    {
+        "url":       "https://www.amazon.com.br/Notebook-Dell-Inspiron/dp/B0CX12345Y/ref=sr_1_1",
+        "asin":      "B0CX12345Y",
+        "title":     "Notebook Dell Inspiron 15 8GB 256GB SSD",
+        "price":     "R$ 2.499,00",
+        "old_price": "R$ 4.999,00",
+        "discount":  "-50%",
+        "image":     "https://m.media-amazon.com/images/I/abc.jpg",
+    },
+    {
+        "url":       "https://www.amazon.com.br/dp/B0AB67890Z",
+        "asin":      "B0AB67890Z",
+        "title":     "Smart TV Samsung 55\" 4K QLED",
+        "price":     "R$ 1.899,00",
+        "old_price": "R$ 3.200,00",
+        "discount":  "41%",
+        "image":     "https://m.media-amazon.com/images/I/xyz.jpg",
+    },
+    {
+        "url":       "https://www.amazon.com.br/dp/B0LOWDISCT",
+        "asin":      "B0LOWDISCT",
+        "title":     "Produto com desconto abaixo do mínimo",
+        "price":     "R$ 99,00",
+        "old_price": "R$ 101,00",
+        "discount":  "2%",
+        "image":     None,
+    },
+    {
+        "url":       "https://www.amazon.com.br/dp/B0NOPRICE0",
+        "asin":      "B0NOPRICE0",
+        "title":     "Produto sem preço",
+        "price":     None,
+        "old_price": None,
+        "discount":  None,
+        "image":     None,
+    },
+]
 
 
-def _make_response(items: list[dict]) -> dict:
-    return {"SearchResult": {"Items": items, "TotalResultCount": len(items)}}
+def _make_page_mock(cards: list[dict]) -> AsyncMock:
+    page = AsyncMock()
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.wait_for_selector = AsyncMock()
+    page.wait_for_timeout = AsyncMock()
+
+    async def evaluate_side_effect(expr):
+        if "scrollBy" in expr:
+            return None
+        return cards
+
+    page.evaluate = AsyncMock(side_effect=evaluate_side_effect)
+    return page
 
 
 @pytest.fixture
@@ -41,190 +66,113 @@ def scraper():
     return AmazonScraper()
 
 
-def _patch_api(response: dict):
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = response
-    mock_resp.raise_for_status = MagicMock()
-
-    mock_client = AsyncMock()
-    mock_client.post = AsyncMock(return_value=mock_resp)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-    return patch("src.scrapers.amazon_scraper.httpx.AsyncClient", return_value=mock_client)
+@pytest.fixture
+def mock_page():
+    return _make_page_mock(_MOCK_CARDS)
 
 
-# ── assinatura ───────────────────────────────────────────────────────────────
+# ── _parse_brl ────────────────────────────────────────────────────────────────
 
-def test_signing_key_returns_bytes():
-    key = _signing_key("my_secret", "20240101")
-    assert isinstance(key, bytes)
-    assert len(key) == 32
+def test_parse_brl_standard():
+    assert _parse_brl("R$ 2.499,00") == 2499.0
 
+def test_parse_brl_nonbreaking_space():
+    assert _parse_brl("R$\xa02.499,00") == 2499.0
 
-def test_signed_headers_contains_required_keys():
-    headers = _signed_headers("AKID", "secret", '{"test": 1}')
-    assert "Authorization" in headers
-    assert "X-Amz-Date" in headers
-    assert "X-Amz-Target" in headers
-    assert headers["Authorization"].startswith("AWS4-HMAC-SHA256")
+def test_parse_brl_no_decimal():
+    assert _parse_brl("R$ 1.000") == 1000.0
 
+def test_parse_brl_none():
+    assert _parse_brl(None) is None
 
-def test_signed_headers_authorization_format():
-    headers = _signed_headers("AKID", "secret", "{}")
-    auth = headers["Authorization"]
-    assert "Credential=AKID/" in auth
-    assert "SignedHeaders=" in auth
-    assert "Signature=" in auth
+def test_parse_brl_invalid():
+    assert _parse_brl("grátis") is None
 
 
-# ── fetch sem credenciais ─────────────────────────────────────────────────────
+# ── _parse_discount_pct ───────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
-async def test_fetch_skips_without_credentials():
-    with patch("src.scrapers.amazon_scraper.AMAZON_ACCESS_KEY", ""), \
-         patch("src.scrapers.amazon_scraper.AMAZON_SECRET_KEY", ""):
-        deals = await AmazonScraper().fetch()
-    assert deals == []
+def test_parse_discount_negative_badge():
+    assert _parse_discount_pct("-50%") == 50
 
+def test_parse_discount_plain():
+    assert _parse_discount_pct("41%") == 41
 
-# ── parse de itens ────────────────────────────────────────────────────────────
+def test_parse_discount_off_suffix():
+    assert _parse_discount_pct("30% OFF") == 30
 
-def test_parse_item_maps_fields(scraper):
-    item = _make_item(asin="B001", title="Notebook Dell Inspiron", price=2500.0, old_price=5000.0, discount_pct=50)
-    deal = scraper._parse_item(item)
-    assert deal is not None
-    assert deal.title == "Notebook Dell Inspiron"
-    assert deal.price == 2500.0
-    assert deal.old_price == 5000.0
-    assert deal.discount_pct == 50
-    assert deal.source == "amazon"
-    assert deal.store == "Amazon"
-    assert "amazon.com.br" in deal.url
+def test_parse_discount_none():
+    assert _parse_discount_pct(None) is None
+
+def test_parse_discount_no_number():
+    assert _parse_discount_pct("Oferta") is None
 
 
-def test_parse_item_uses_detail_page_url(scraper):
-    url = "https://www.amazon.com.br/dp/B001?tag=achadin09c587-20&ref=test"
-    item = _make_item(url=url)
-    deal = scraper._parse_item(item)
-    assert deal.url == url
-
-
-def test_parse_item_fallback_url_when_missing(scraper):
-    item = _make_item()
-    item.pop("DetailPageURL")
-    deal = scraper._parse_item(item)
-    assert deal is not None
-    assert "amazon.com.br/dp/" in deal.url
-    assert "tag=" in deal.url
-
-
-def test_parse_item_returns_none_without_title(scraper):
-    item = _make_item()
-    item["ItemInfo"]["Title"]["DisplayValue"] = ""
-    assert scraper._parse_item(item) is None
-
-
-def test_parse_item_returns_none_without_listings(scraper):
-    item = _make_item()
-    item["Offers"]["Listings"] = []
-    assert scraper._parse_item(item) is None
-
-
-def test_parse_item_filters_low_discount(scraper):
-    item = _make_item(discount_pct=MIN_DISCOUNT_PERCENT - 1, old_price=105.0, price=100.0)
-    item["Offers"]["Listings"][0]["SavingBasis"]["Percentage"] = MIN_DISCOUNT_PERCENT - 1
-    assert scraper._parse_item(item) is None
-
-
-def test_parse_item_calculates_discount_when_missing(scraper):
-    item = _make_item(price=100.0, old_price=200.0)
-    item["Offers"]["Listings"][0]["SavingBasis"].pop("Percentage")
-    deal = scraper._parse_item(item)
-    assert deal is not None
-    assert deal.discount_pct == 50
-
-
-def test_parse_item_image_url(scraper):
-    item = _make_item(image="https://m.media-amazon.com/images/I/abc.jpg")
-    deal = scraper._parse_item(item)
-    assert deal.image_url == "https://m.media-amazon.com/images/I/abc.jpg"
-
-
-def test_parse_item_no_image(scraper):
-    item = _make_item(image=None)
-    deal = scraper._parse_item(item)
-    assert deal is not None
-    assert deal.image_url is None
-
-
-# ── fetch completo ────────────────────────────────────────────────────────────
+# ── _scrape ───────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_fetch_returns_deals(scraper):
-    items = [_make_item(asin=f"B00{i}", title=f"Produto {i}") for i in range(3)]
-    response = _make_response(items)
-
-    with patch("src.scrapers.amazon_scraper.AMAZON_ACCESS_KEY", "AKID"), \
-         patch("src.scrapers.amazon_scraper.AMAZON_SECRET_KEY", "secret"), \
-         _patch_api(response):
-        deals = await scraper.fetch()
-
+async def test_scrape_returns_deals(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
     assert len(deals) > 0
 
+@pytest.mark.asyncio
+async def test_scrape_maps_fields_correctly(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
+    dell = next(d for d in deals if "Dell" in d.title)
+    assert dell.price == 2499.0
+    assert dell.old_price == 4999.0
+    assert dell.discount_pct == 50
+    assert dell.source == "amazon"
+    assert dell.store == "Amazon"
+    assert "amazon.com.br" in dell.url
 
 @pytest.mark.asyncio
-async def test_fetch_deduplicates_same_asin_across_categories(scraper):
-    # Mesmo ASIN aparece em múltiplas categorias
-    items = [_make_item(asin="B001", title="Item Repetido")]
-    response = _make_response(items)
-
-    with patch("src.scrapers.amazon_scraper.AMAZON_ACCESS_KEY", "AKID"), \
-         patch("src.scrapers.amazon_scraper.AMAZON_SECRET_KEY", "secret"), \
-         _patch_api(response):
-        deals = await scraper.fetch()
-
-    asins_in_urls = [d.url for d in deals if "B001" in d.url]
-    assert len(asins_in_urls) == 1
-
+async def test_scrape_filters_low_discount(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
+    for deal in deals:
+        if deal.discount_pct is not None:
+            assert deal.discount_pct >= MIN_DISCOUNT_PERCENT
 
 @pytest.mark.asyncio
-async def test_fetch_respects_max_deals(scraper):
-    items = [_make_item(asin=f"B{i:04d}", title=f"Produto {i}") for i in range(20)]
-    response = _make_response(items)
+async def test_scrape_skips_missing_price(scraper):
+    page = _make_page_mock([_MOCK_CARDS[3]])  # B0NOPRICE0
+    deals = await scraper._scrape(page)
+    assert all("B0NOPRICE0" not in d.url for d in deals)
 
-    with patch("src.scrapers.amazon_scraper.AMAZON_ACCESS_KEY", "AKID"), \
-         patch("src.scrapers.amazon_scraper.AMAZON_SECRET_KEY", "secret"), \
-         _patch_api(response):
-        deals = await scraper.fetch()
+@pytest.mark.asyncio
+async def test_scrape_deduplicates_by_asin(scraper):
+    dup = [_MOCK_CARDS[0], {**_MOCK_CARDS[0]}]
+    page = _make_page_mock(dup)
+    deals = await scraper._scrape(page)
+    assert len([d for d in deals if "B0CX12345Y" in d.url]) == 1
 
+@pytest.mark.asyncio
+async def test_scrape_respects_max_deals(scraper):
+    many = [
+        {
+            "url": f"https://www.amazon.com.br/dp/B{i:09d}",
+            "asin": f"B{i:09d}",
+            "title": f"Produto {i}",
+            "price": "R$ 100,00",
+            "old_price": "R$ 200,00",
+            "discount": "-50%",
+            "image": None,
+        }
+        for i in range(MAX_DEALS_PER_RUN * 4)
+    ]
+    page = _make_page_mock(many)
+    deals = await scraper._scrape(page)
     assert len(deals) <= MAX_DEALS_PER_RUN
 
+@pytest.mark.asyncio
+async def test_scrape_calculates_discount_from_prices(scraper):
+    card = {**_MOCK_CARDS[0], "discount": None}
+    page = _make_page_mock([card])
+    deals = await scraper._scrape(page)
+    assert deals[0].discount_pct == 50
 
 @pytest.mark.asyncio
-async def test_fetch_continues_when_one_category_fails(scraper):
-    good_response = _make_response([_make_item(asin="B001", title="Produto Bom")])
-    mock_resp_good = MagicMock()
-    mock_resp_good.json.return_value = good_response
-    mock_resp_good.raise_for_status = MagicMock()
-
-    call_count = 0
-
-    async def mock_post(*args, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            raise Exception("HTTP 503")
-        return mock_resp_good
-
-    mock_client = AsyncMock()
-    mock_client.post = mock_post
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    with patch("src.scrapers.amazon_scraper.AMAZON_ACCESS_KEY", "AKID"), \
-         patch("src.scrapers.amazon_scraper.AMAZON_SECRET_KEY", "secret"), \
-         patch("src.scrapers.amazon_scraper.httpx.AsyncClient", return_value=mock_client):
-        deals = await scraper.fetch()
-
-    # Falhou em 1 categoria mas continua pelas demais
-    assert len(deals) >= 0
+async def test_scrape_bad_item_does_not_break_batch(scraper):
+    bad = {"url": None, "asin": "B0BADITEM1", "title": "Mal formado", "price": "invalido", "old_price": None, "discount": None, "image": None}
+    page = _make_page_mock([bad, _MOCK_CARDS[0]])
+    deals = await scraper._scrape(page)
+    assert any("Dell" in d.title for d in deals)

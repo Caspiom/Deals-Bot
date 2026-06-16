@@ -33,8 +33,6 @@ DISCORD_BOT_TOKEN: str = os.getenv("DISCORD_BOT_TOKEN", "")
 # ── Afiliados ────────────────────────────────────────────────────────────────
 AFFILIATE_ID: str          = os.getenv("AFFILIATE_ID", "MEU_ID_AFILIADO")
 AMAZON_ASSOCIATE_TAG: str  = os.getenv("AMAZON_ASSOCIATE_TAG", "meutag-20")
-AMAZON_ACCESS_KEY: str     = os.getenv("AMAZON_ACCESS_KEY", "")
-AMAZON_SECRET_KEY: str     = os.getenv("AMAZON_SECRET_KEY", "")
 ALIEXPRESS_APP_KEY: str     = os.getenv("ALIEXPRESS_APP_KEY", "")
 ALIEXPRESS_SECRET_KEY: str  = os.getenv("ALIEXPRESS_SECRET_KEY", "")
 ALIEXPRESS_TRACKING_ID: str = os.getenv("ALIEXPRESS_TRACKING_ID", "")

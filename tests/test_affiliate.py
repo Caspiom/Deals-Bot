@@ -8,11 +8,13 @@ def test_amazon_url_receives_tag():
     assert f"tag={AMAZON_ASSOCIATE_TAG}" in result
 
 
-def test_amazon_url_preserves_existing_params():
-    url = "https://www.amazon.com.br/dp/B0CX1234AB?ref=sr_1_1"
+def test_amazon_url_strips_tracking_and_reconstructs_canonical():
+    # Nova lógica: extrai ASIN e reconstrói URL limpa — ref= e outros params de tracking
+    # são descartados intencionalmente para produzir links canônicos e limpos.
+    url = "https://www.amazon.com.br/Nome-Produto/dp/B0CX1234AB/ref=sr_1_1?ref=noisy"
     result = convert(url)
-    assert "ref=sr_1_1" in result
-    assert f"tag={AMAZON_ASSOCIATE_TAG}" in result
+    assert result == f"https://www.amazon.com.br/dp/B0CX1234AB?tag={AMAZON_ASSOCIATE_TAG}"
+    assert "ref=" not in result
 
 
 def test_magalu_url_receives_partner_id():

@@ -1,236 +1,167 @@
-import asyncio
-import hashlib
-import hmac
-import json
-from datetime import datetime, timezone
-
-import httpx
+import re
+from playwright.async_api import Page
 from loguru import logger
-
-from src.config.settings import (
-    AMAZON_ACCESS_KEY,
-    AMAZON_SECRET_KEY,
-    AMAZON_ASSOCIATE_TAG,
-    MIN_DISCOUNT_PERCENT,
-    MAX_DEALS_PER_RUN,
-    PROXY_URL,
-)
+from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
 from src.models import Deal
-from src.scrapers.base_scraper import BaseScraper
-from src.utils.retry import scraper_retry
+from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
 
-_HOST = "webservices.amazon.com.br"
-_ENDPOINT = f"https://{_HOST}/paapi5/searchitems"
-_SERVICE = "ProductAdvertisingAPI"
-_REGION = "us-east-1"
-_TARGET = "com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems"
+# Página central de Ofertas do Dia da Amazon BR — sem necessidade de PA API
+_DEALS_URL = "https://www.amazon.com.br/deals"
 
-_RESOURCES = [
-    "Images.Primary.Medium",
-    "ItemInfo.Title",
-    "Offers.Listings.Price",
-    "Offers.Listings.SavingBasis",
-    "Offers.Listings.Availability.Message",
-]
+# ASIN: 10 caracteres A-Z0-9 logo após /dp/
+_ASIN_RE = re.compile(r"/dp/([A-Z0-9]{10})")
 
-# PA API tem rate limit de ~1 req/s por conta — categorias executadas sequencialmente
-# com delay de 1.1s para não acumular 429s.
-_CATEGORIES: dict[str, str] = {
-    "Electronics":    "smart tv",
-    "Computers":      "notebook",
-    "Wireless":       "smartphone",
-    "HomeAndKitchen": "eletrodoméstico",
-    "OfficeProducts": "impressora",
-    "VideoGames":     "controle",
-}
+# Ancora em links de produto /dp/{ASIN} — estrutura estável há +10 anos.
+# Usa .a-offscreen para preços (spans legíveis por screen readers, mais confiável
+# que parsear whole+fraction separados).
+_EXTRACT_JS = """() => {
+    const asinRe = /\\/dp\\/([A-Z0-9]{10})/;
+    const seen = new Set();
+    const results = [];
 
-# ── AWS Signature v4 ─────────────────────────────────────────────────────────
+    for (const link of document.querySelectorAll('a[href*="/dp/"]')) {
+        try {
+            const m = asinRe.exec(link.href);
+            if (!m || seen.has(m[1])) continue;
+            seen.add(m[1]);
 
-def _hmac_sha256(key: bytes, msg: str) -> bytes:
-    return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
+            const card = (
+                link.closest('[class*="DealCard"]') ||
+                link.closest('[data-testid*="deal"]') ||
+                link.closest('[class*="deal-card"]') ||
+                link.closest('li') ||
+                link.parentElement?.parentElement
+            );
 
+            const titleEl = link.querySelector('span') ||
+                            card?.querySelector('h2 span, [class*="title"] span');
 
-def _signing_key(secret: str, date_stamp: str) -> bytes:
-    k = _hmac_sha256(("AWS4" + secret).encode("utf-8"), date_stamp)
-    k = _hmac_sha256(k, _REGION)
-    k = _hmac_sha256(k, _SERVICE)
-    return _hmac_sha256(k, "aws4_request")
+            // .a-offscreen contém o preço completo ("R$ 1.299,00") — mais fácil de parsear
+            const offscreens = Array.from((card || link).querySelectorAll('.a-offscreen'));
+            const currentEl = offscreens.find(el =>
+                !el.closest('s') && !el.closest('.a-text-strike') && el.innerText.includes('R$')
+            );
+            const oldEl = offscreens.find(el =>
+                (el.closest('s') || el.closest('.a-text-strike')) && el.innerText.includes('R$')
+            );
 
+            const discountEl = card?.querySelector(
+                '[class*="badgeLabel"] span, [class*="percent-off"], ' +
+                '[class*="savings"] span, [class*="discount"] span'
+            );
 
-def _signed_headers(access_key: str, secret_key: str, body: str) -> dict[str, str]:
-    now = datetime.now(timezone.utc)
-    amz_date = now.strftime("%Y%m%dT%H%M%SZ")
-    date_stamp = now.strftime("%Y%m%d")
+            const imgEl = (card || link).querySelector(
+                'img[src*="amazon.com"], img[src*="ssl-images-amazon"]'
+            );
 
-    payload_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
-
-    canonical_headers = (
-        f"content-encoding:amz-1.0\n"
-        f"content-type:application/json; charset=utf-8\n"
-        f"host:{_HOST}\n"
-        f"x-amz-date:{amz_date}\n"
-        f"x-amz-target:{_TARGET}\n"
-    )
-    signed_headers = "content-encoding;content-type;host;x-amz-date;x-amz-target"
-
-    canonical_request = "\n".join([
-        "POST",
-        "/paapi5/searchitems",
-        "",
-        canonical_headers,
-        signed_headers,
-        payload_hash,
-    ])
-
-    credential_scope = f"{date_stamp}/{_REGION}/{_SERVICE}/aws4_request"
-    string_to_sign = "\n".join([
-        "AWS4-HMAC-SHA256",
-        amz_date,
-        credential_scope,
-        hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
-    ])
-
-    sig = hmac.new(
-        _signing_key(secret_key, date_stamp),
-        string_to_sign.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-
-    auth = (
-        f"AWS4-HMAC-SHA256 Credential={access_key}/{credential_scope}, "
-        f"SignedHeaders={signed_headers}, Signature={sig}"
-    )
-
-    return {
-        "Content-Encoding": "amz-1.0",
-        "Content-Type": "application/json; charset=utf-8",
-        "Host": _HOST,
-        "X-Amz-Date": amz_date,
-        "X-Amz-Target": _TARGET,
-        "Authorization": auth,
+            results.push({
+                url:       link.href,
+                asin:      m[1],
+                title:     titleEl?.innerText?.trim() ?? null,
+                price:     currentEl?.innerText?.trim() ?? null,
+                old_price: oldEl?.innerText?.trim() ?? null,
+                discount:  discountEl?.innerText?.trim() ?? null,
+                image:     imgEl?.src ?? null,
+            });
+        } catch (_) {}
     }
+    return results.filter(r => r.asin && r.title);
+}"""
 
 
-# ── Scraper ──────────────────────────────────────────────────────────────────
+def _parse_brl(text: str | None) -> float | None:
+    if not text:
+        return None
+    cleaned = re.sub(r"[R$\s\xa0]", "", text)
+    if "," in cleaned and "." in cleaned:
+        # "1.299,00" → BRL completo: ponto = milhar, vírgula = decimal
+        cleaned = cleaned.replace(".", "").replace(",", ".")
+    elif "," in cleaned:
+        # "299,90" → só decimal BRL
+        cleaned = cleaned.replace(",", ".")
+    elif "." in cleaned:
+        # "1.000" → ponto com 3 dígitos = separador de milhar BRL
+        parts = cleaned.split(".")
+        if len(parts) == 2 and len(parts[1]) == 3 and parts[1].isdigit():
+            cleaned = parts[0] + parts[1]
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
 
-class AmazonScraper(BaseScraper):
+
+def _parse_discount_pct(text: str | None) -> int | None:
+    if not text:
+        return None
+    m = re.search(r"(\d+)\s*%", text)
+    return int(m.group(1)) if m else None
+
+
+class AmazonScraper(PlaywrightBaseScraper):
     name = "amazon"
 
-    async def fetch(self) -> list[Deal]:
-        if not AMAZON_ACCESS_KEY or not AMAZON_SECRET_KEY:
-            logger.warning("Amazon: AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY não configurados. Scraper ignorado.")
+    async def _scrape(self, page: Page) -> list[Deal]:
+        await page.goto(_DEALS_URL, wait_until="domcontentloaded", timeout=30000)
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            pass
+
+        try:
+            await page.wait_for_selector('a[href*="/dp/"]', timeout=15000)
+        except Exception:
+            logger.warning("Amazon: nenhum produto encontrado na página de ofertas.")
             return []
+
+        for i in range(5):
+            await page.evaluate("window.scrollBy(0, window.innerHeight)")
+            await page.wait_for_timeout(500 + (i % 3) * 200)
+
+        raw: list[dict] = await page.evaluate(_EXTRACT_JS)
+        logger.info("Amazon: {} cards extraídos do DOM.", len(raw))
 
         seen_asins: set[str] = set()
         deals: list[Deal] = []
 
-        # Sequencial com delay de 1.1s — PA API limita a ~1 req/s por conta
-        for i, (search_index, keywords) in enumerate(_CATEGORIES.items()):
+        for item in raw:
+            try:
+                asin = item.get("asin", "")
+                if not asin or asin in seen_asins:
+                    continue
+                seen_asins.add(asin)
+
+                price = _parse_brl(item.get("price"))
+                if not price or price <= 0:
+                    continue
+
+                old_price = _parse_brl(item.get("old_price"))
+                discount_pct = _parse_discount_pct(item.get("discount"))
+
+                if discount_pct is None and old_price and old_price > price:
+                    discount_pct = int((1 - price / old_price) * 100)
+
+                if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                    continue
+
+                image = item.get("image") or ""
+
+                deals.append(Deal(
+                    title=item["title"],
+                    url=item["url"],
+                    price=price,
+                    old_price=old_price if old_price and old_price > price else None,
+                    discount_pct=discount_pct,
+                    image_url=image if image.startswith("http") else None,
+                    source=self.name,
+                    store="Amazon",
+                ))
+            except Exception as exc:
+                logger.warning("Amazon: erro ao processar ASIN={}: {}", item.get("asin", "?"), exc)
+                continue
+
             if len(deals) >= MAX_DEALS_PER_RUN:
                 break
 
-            if i > 0:
-                await asyncio.sleep(1.1)
-
-            try:
-                results = await self._fetch_category(search_index, keywords)
-            except Exception as exc:
-                logger.warning("Amazon [{}]: falhou — {}", search_index, exc)
-                continue
-
-            for deal, asin in results:
-                if asin in seen_asins:
-                    continue
-                seen_asins.add(asin)
-                deals.append(deal)
-                if len(deals) >= MAX_DEALS_PER_RUN:
-                    break
-
         logger.info("Amazon: {} deals válidos após filtros.", len(deals))
         return deals
-
-    @scraper_retry
-    async def _fetch_category(self, search_index: str, keywords: str) -> list[tuple[Deal, str]]:
-        payload = {
-            "Keywords": keywords,
-            "Resources": _RESOURCES,
-            "SearchIndex": search_index,
-            "ItemCount": 10,
-            "MinSavingPercent": MIN_DISCOUNT_PERCENT,
-            "SortBy": "Featured",
-            "PartnerTag": AMAZON_ASSOCIATE_TAG,
-            "PartnerType": "Associates",
-            "Marketplace": "www.amazon.com.br",
-        }
-        body = json.dumps(payload)
-        headers = _signed_headers(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, body)
-
-        async with httpx.AsyncClient(timeout=15, proxy=PROXY_URL or None) as client:
-            resp = await client.post(_ENDPOINT, content=body, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-
-        items = data.get("SearchResult", {}).get("Items", [])
-        logger.debug("Amazon [{}]: {} itens recebidos.", search_index, len(items))
-
-        deals: list[tuple[Deal, str]] = []
-        for item in items:
-            try:
-                deal = self._parse_item(item)
-                if deal:
-                    deals.append((deal, item.get("ASIN", "")))
-            except Exception as exc:
-                logger.warning("Amazon: erro ao parsear item {}: {}", item.get("ASIN", "?"), exc)
-        return deals
-
-    def _parse_item(self, item: dict) -> Deal | None:
-        asin = item.get("ASIN", "")
-        title = (
-            item.get("ItemInfo", {})
-            .get("Title", {})
-            .get("DisplayValue", "")
-            .strip()
-        )
-        if not title:
-            return None
-
-        url = item.get("DetailPageURL", "")
-        if not url:
-            url = f"https://www.amazon.com.br/dp/{asin}?tag={AMAZON_ASSOCIATE_TAG}"
-
-        listings = item.get("Offers", {}).get("Listings", [])
-        if not listings:
-            return None
-
-        listing = listings[0]
-        price = listing.get("Price", {}).get("Amount")
-        saving = listing.get("SavingBasis", {})
-        old_price = saving.get("Amount")
-        discount_pct = saving.get("Percentage")
-
-        if not price or price <= 0:
-            return None
-
-        if discount_pct is None and old_price and old_price > price:
-            discount_pct = int((1 - price / old_price) * 100)
-
-        if not discount_pct or discount_pct < MIN_DISCOUNT_PERCENT:
-            return None
-
-        image_url = (
-            item.get("Images", {})
-            .get("Primary", {})
-            .get("Medium", {})
-            .get("URL")
-        )
-
-        return Deal(
-            title=title,
-            url=url,
-            price=float(price),
-            old_price=float(old_price) if old_price and old_price > price else None,
-            discount_pct=int(discount_pct),
-            image_url=image_url,
-            source=self.name,
-            store="Amazon",
-        )
