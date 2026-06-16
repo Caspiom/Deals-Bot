@@ -35,5 +35,4 @@ def _mercadolivre(url: str) -> str:
 
 
 def _default(url: str) -> str:
-    # Mock para fontes sem integração oficial — substituir pela API real futuramente
-    return f"https://shope.ee/exemplo?afiliado={AFFILIATE_ID}"
+    return url

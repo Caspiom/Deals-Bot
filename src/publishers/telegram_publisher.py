@@ -119,6 +119,7 @@ class TelegramPublisher(BasePublisher):
 
         store = deal.store or deal.source.capitalize()
         lines.append(f"\n🏪 Loja: {store}")
+        lines.append(f"📡 Via: {deal.source.capitalize()}")
 
         category = classify(deal)
         lines.append(_CATEGORY_TAGS.get(category, "#Ofertas"))

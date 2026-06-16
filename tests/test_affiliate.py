@@ -21,11 +21,9 @@ def test_magalu_url_receives_partner_id():
     assert f"partner_id={AFFILIATE_ID}" in result
 
 
-def test_unknown_source_returns_shope_link():
+def test_unknown_source_returns_original_url():
     url = "https://www.kabum.com.br/produto/123456"
-    result = convert(url)
-    assert "shope.ee" in result
-    assert AFFILIATE_ID in result
+    assert convert(url) == url
 
 
 def test_convert_always_returns_string():
