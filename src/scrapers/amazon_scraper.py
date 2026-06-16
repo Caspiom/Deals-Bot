@@ -13,9 +13,11 @@ from src.config.settings import (
     AMAZON_ASSOCIATE_TAG,
     MIN_DISCOUNT_PERCENT,
     MAX_DEALS_PER_RUN,
+    PROXY_URL,
 )
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
+from src.utils.retry import scraper_retry
 
 _HOST = "webservices.amazon.com.br"
 _ENDPOINT = f"https://{_HOST}/paapi5/searchitems"
@@ -28,10 +30,11 @@ _RESOURCES = [
     "ItemInfo.Title",
     "Offers.Listings.Price",
     "Offers.Listings.SavingBasis",
+    "Offers.Listings.Availability.Message",
 ]
 
-# Categorias com maior volume de deals no Amazon BR → keyword amplo por categoria
-# MinSavingPercent faz o filtro de desconto; keyword apenas direciona a busca
+# PA API tem rate limit de ~1 req/s por conta — categorias executadas sequencialmente
+# com delay de 1.1s para não acumular 429s.
 _CATEGORIES: dict[str, str] = {
     "Electronics":    "smart tv",
     "Computers":      "notebook",
@@ -40,7 +43,6 @@ _CATEGORIES: dict[str, str] = {
     "OfficeProducts": "impressora",
     "VideoGames":     "controle",
 }
-
 
 # ── AWS Signature v4 ─────────────────────────────────────────────────────────
 
@@ -62,7 +64,6 @@ def _signed_headers(access_key: str, secret_key: str, body: str) -> dict[str, st
 
     payload_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
 
-    # Ordem lexicográfica obrigatória para SigV4
     canonical_headers = (
         f"content-encoding:amz-1.0\n"
         f"content-type:application/json; charset=utf-8\n"
@@ -75,7 +76,7 @@ def _signed_headers(access_key: str, secret_key: str, body: str) -> dict[str, st
     canonical_request = "\n".join([
         "POST",
         "/paapi5/searchitems",
-        "",  # sem query string
+        "",
         canonical_headers,
         signed_headers,
         payload_hash,
@@ -120,31 +121,35 @@ class AmazonScraper(BaseScraper):
             logger.warning("Amazon: AMAZON_ACCESS_KEY / AMAZON_SECRET_KEY não configurados. Scraper ignorado.")
             return []
 
-        results = await asyncio.gather(
-            *[self._fetch_category(idx, kw) for idx, kw in _CATEGORIES.items()],
-            return_exceptions=True,
-        )
-
         seen_asins: set[str] = set()
         deals: list[Deal] = []
 
-        for search_index, result in zip(_CATEGORIES.keys(), results):
-            if isinstance(result, Exception):
-                logger.warning("Amazon [{}]: falhou — {}", search_index, result)
+        # Sequencial com delay de 1.1s — PA API limita a ~1 req/s por conta
+        for i, (search_index, keywords) in enumerate(_CATEGORIES.items()):
+            if len(deals) >= MAX_DEALS_PER_RUN:
+                break
+
+            if i > 0:
+                await asyncio.sleep(1.1)
+
+            try:
+                results = await self._fetch_category(search_index, keywords)
+            except Exception as exc:
+                logger.warning("Amazon [{}]: falhou — {}", search_index, exc)
                 continue
-            for deal, asin in result:
+
+            for deal, asin in results:
                 if asin in seen_asins:
                     continue
                 seen_asins.add(asin)
                 deals.append(deal)
                 if len(deals) >= MAX_DEALS_PER_RUN:
                     break
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
 
         logger.info("Amazon: {} deals válidos após filtros.", len(deals))
         return deals
 
+    @scraper_retry
     async def _fetch_category(self, search_index: str, keywords: str) -> list[tuple[Deal, str]]:
         payload = {
             "Keywords": keywords,
@@ -160,7 +165,8 @@ class AmazonScraper(BaseScraper):
         body = json.dumps(payload)
         headers = _signed_headers(AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, body)
 
-        async with httpx.AsyncClient(timeout=15) as client:
+        proxies = {"all://": PROXY_URL} if PROXY_URL else None
+        async with httpx.AsyncClient(timeout=15, proxies=proxies) as client:
             resp = await client.post(_ENDPOINT, content=body, headers=headers)
             resp.raise_for_status()
             data = resp.json()
@@ -170,9 +176,12 @@ class AmazonScraper(BaseScraper):
 
         deals: list[tuple[Deal, str]] = []
         for item in items:
-            deal = self._parse_item(item)
-            if deal:
-                deals.append((deal, item.get("ASIN", "")))
+            try:
+                deal = self._parse_item(item)
+                if deal:
+                    deals.append((deal, item.get("ASIN", "")))
+            except Exception as exc:
+                logger.warning("Amazon: erro ao parsear item {}: {}", item.get("ASIN", "?"), exc)
         return deals
 
     def _parse_item(self, item: dict) -> Deal | None:
@@ -186,7 +195,6 @@ class AmazonScraper(BaseScraper):
         if not title:
             return None
 
-        # DetailPageURL já vem com ?tag= da resposta da API
         url = item.get("DetailPageURL", "")
         if not url:
             url = f"https://www.amazon.com.br/dp/{asin}?tag={AMAZON_ASSOCIATE_TAG}"

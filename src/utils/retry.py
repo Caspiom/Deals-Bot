@@ -28,3 +28,12 @@ publisher_retry = retry(
 )
 
 telegram_retry = publisher_retry  # alias de compatibilidade
+
+# Scrapers HTTP: 3 tentativas, backoff curto (não bloqueia o ciclo por muito tempo)
+scraper_retry = retry(
+    retry=retry_if_exception(_is_retriable),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    before_sleep=_log_retry,
+    reraise=True,
+)

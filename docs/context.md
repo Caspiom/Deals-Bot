@@ -29,6 +29,7 @@
 | `python-dotenv` | 1.2.2 | Carregamento de variáveis de ambiente via `.env` |
 | `loguru` | 0.7.3 | Logging estruturado com rotação de arquivos |
 | `tenacity` | 9.1.4 | Retries declarativos com backoff exponencial |
+| `fake-useragent` | 2.2.0 | Rotação de User-Agent realista nos scrapers Playwright |
 | `sqlite3` | built-in | Filtro de duplicidade (dedup) — sem dependência externa |
 | `discord.py` | 2.7.1 | Bot do Discord (slash commands, embeds, multi-servidor) |
 | `pytest` + `pytest-asyncio` | 9.1.0 / 1.4.0 | Testes (grupo `dev`) |
@@ -58,6 +59,7 @@ deals-bot/
 │   │   ├── mercadolivre_scraper.py     ← Playwright: página de ofertas do ML
 │   │   ├── kabum_scraper.py            ← httpx: API REST pública do KaBuM
 │   │   ├── magalu_scraper.py           ← Playwright: busca por desconto ordenada por -percentual_desconto
+│   │   ├── shopee_scraper.py           ← httpx: API interna /api/v4/search (multi-keyword, preços ÷ 100 000)
 │   │   ├── aliexpress_scraper.py       ← httpx: AliExpress Portals API (HMAC-MD5, preço local c/ impostos BR)
 │   │   └── amazon_scraper.py           ← httpx: Amazon PA API v5 (AWS Signature v4, multi-categoria)
 │   │
@@ -107,7 +109,7 @@ deals-bot/
 APScheduler (a cada SCRAPE_INTERVAL_MINUTES)
         │
         ▼
-  asyncio.gather(scrapers)       ← MercadoLivre, KaBuM, Magalu, AliExpress, Amazon em paralelo (lojas diretas)
+  asyncio.gather(scrapers)       ← MercadoLivre, KaBuM, Magalu, Shopee, AliExpress, Amazon em paralelo
         │  Retorna: List[Deal]
         ▼
   is_commissionable(url)         ← Descarta URLs de agregadores (diretriz 4.11)
@@ -203,7 +205,7 @@ O `DiscordPublisher` não usa canal fixo. Cada servidor Discord configura seu pr
 | Magazine Luiza | ✅ Integrado | Parceiros Magalu (`partner_id=`) | Scraper Playwright ativo; `affiliate.py` injeta `partner_id` |
 | KaBuM | ✅ Scraper ativo | Awin Brasil / Lomadee | URL direta; integração afiliado pendente |
 | AliExpress | ✅ Integrado | Programa AliExpress Portals (Portals API) | `promotionLink` com tracking; `localSalePrice` com impostos BR |
-| Shopee | 🔲 Pendente | Shopee Affiliates | Scraper pendente |
+| Shopee | ✅ Integrado | Shopee Affiliates (`af_id=`) | API interna /api/v4/search; `af_id` injetado via `affiliate.py._shopee()` |
 | Casas Bahia | 🔲 Pendente | Awin Brasil | Produto de volume alto; scraper viável |
 | Netshoes | 🔲 Pendente | Lomadee / Awin | Forte em calçados e esportes |
 | Samsung BR | 🔲 Pendente | Awin Brasil | Lançamentos e campanhas de eletrônicos |
@@ -436,6 +438,47 @@ docker compose up -d
 - [x] 154/154 testes passando, zero warnings
 
 **Decisão registrada:** PA API exige credenciais separadas do `ASSOCIATE_TAG` (obtidas em associados.amazon.com.br → Ferramentas → API de Publicidade). O scraper ignora graciosamente quando `AMAZON_ACCESS_KEY` não está configurado. A PA API tem rate limit de ~1 req/s e exige mínimo de 3 vendas qualificadas em 180 dias para manter acesso.
+
+### ✅ Fase 14.8 — Scraper Shopee (CONCLUÍDA — 2026-06-16)
+- [x] `src/scrapers/shopee_scraper.py` — reescrito de httpx para Playwright; API interna retornava 403; Playwright usa sessão real de browser, resolvendo o bloqueio
+- [x] JS extractor ancora no padrão `-i.{shopid}.{itemid}` dos links de produto — estável mesmo com class names ofuscados
+- [x] `affiliate.py` — novo `_shopee()`: appends `?af_id={AFFILIATE_ID}` à URL
+- [x] `tests/test_shopee_scraper.py` — 14 testes (parse de campos, dedup, filtros, resiliência)
+- [x] 168/168 testes passando, zero warnings
+
+**Decisão registrada:** Shopee bloqueia httpx com 403 — requer cookies de sessão de browser real. Playwright contorna isso. O parâmetro `af_id` é o rastreamento para URLs diretas; links curtos (`s.shopee.com.br`) requerem API de afiliados — implementação futura.
+
+---
+
+### ✅ Fase 14.9 — Hardening do Motor de Captação (CONCLUÍDA — 2026-06-16)
+
+**Diagnóstico que motivou esta fase:** Remoção do Promobit e Pelando (diretriz 4.11) secou o canal pois os scrapers de lojas diretas apresentavam quatro falhas críticas:
+1. `PlaywrightBaseScraper` abria um Chromium por scraper sem semáforo → 3 browsers simultâneos → potencial OOM em container 1.5GB
+2. `ShopeeScraper` buscava por popularidade (`sortBy=popular`) em vez de promoções
+3. `MercadoLivreScraper` parava no scroll 3 de uma página de infinite scroll → volume baixo
+4. `MagaluScraper` não aguardava o DOM carregar → extraía 0 cards consistentemente
+
+**Mudanças implementadas:**
+
+- [x] `src/scrapers/playwright_base_scraper.py` — **Semáforo global** `asyncio.Semaphore(PLAYWRIGHT_MAX_BROWSERS)` criado lazy; máximo 2 browsers ao mesmo tempo; **UA rotation** via `fake-useragent` (fallback para lista hardcoded de 5 UAs recentes se offline); **stealth init script** remove `navigator.webdriver`, adiciona `navigator.plugins` e `window.chrome`; suporte a **proxy** via `PROXY_URL` repassado ao `launch(proxy=...)`; viewport, locale e timezone realistas (`pt-BR`, `America/Sao_Paulo`)
+- [x] `src/scrapers/mercadolivre_scraper.py` — 10 scrolls (era 3); `wait_for_selector('[class*="poly-card"]')` antes de scrollar; `wait_until="domcontentloaded"` + selector guard substitui `networkidle` (evita timeout por analytics); delay variável por scroll (500-900ms) para simular leitura humana; extração defensiva com `try/except` por item
+- [x] `src/scrapers/magalu_scraper.py` — `wait_for_selector('a[href*="/p/"]', timeout=15000)` antes de extrair; extração defensiva com `try/except` por item e por campo de preço
+- [x] `src/scrapers/shopee_scraper.py` — `https://shopee.com.br/flash_sale` adicionado como primeira URL (40-80% OFF); `wait_for_selector` antes de scrollar; `try/catch` interno no JS extractor evita que uma URL inválida quebre o loop; extração defensiva Python por item
+- [x] `src/scrapers/amazon_scraper.py` — categorias agora **sequenciais** com `asyncio.sleep(1.1)` entre requests (PA API limita 1 req/s); decorator `@scraper_retry` na `_fetch_category`; suporte a proxy; `try/except` por item no parse
+- [x] `src/scrapers/kabum_scraper.py` — decorator `@scraper_retry` no `fetch()`; User-Agent atualizado para Chrome/131; suporte a proxy; extração defensiva por item com log contextual
+- [x] `src/scrapers/aliexpress_scraper.py` — decorator `@scraper_retry` no `fetch()`; suporte a proxy; `try/except` por produto
+- [x] `src/utils/retry.py` — novo decorator `scraper_retry` (3 tentativas, backoff 1-8s) separado do `publisher_retry` (2-30s)
+- [x] `src/config/settings.py` — `PLAYWRIGHT_MAX_BROWSERS` (padrão 2) e `PROXY_URL` (padrão vazio)
+- [x] `.env.example` — documentadas novas variáveis com comentários de formato
+- [x] `fake-useragent==2.2.0` adicionado via `uv add`
+- [x] 168/168 testes passando, zero warnings
+
+**Decisões registradas:**
+- Semáforo criado lazy (não no module-level) para garantir compatibilidade com event loops que podem não existir no momento do import
+- `wait_until="domcontentloaded"` preferido sobre `"networkidle"` nos scrapers Playwright: `networkidle` trava em páginas com analytics que disparam requests contínuos (ML, Magalu, Shopee)
+- Amazon mantém `asyncio.gather` para scrapers httpx mas serializa as 6 categorias da PA API — requests paralelos à PA API geram 429 imediato
+- Proxy configurado uma vez no `PlaywrightBaseScraper` e nos clientes `httpx` via `PROXY_URL` — não exige mudança nos scrapers individuais
+- Shopee Flash Sale (`/flash_sale`) como fonte primária: produtos com 40-80% de desconto real vs buscas por `popular` que não têm critério de desconto
 
 ---
 

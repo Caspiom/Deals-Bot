@@ -40,9 +40,13 @@ ALIEXPRESS_SECRET_KEY: str  = os.getenv("ALIEXPRESS_SECRET_KEY", "")
 ALIEXPRESS_TRACKING_ID: str = os.getenv("ALIEXPRESS_TRACKING_ID", "")
 
 # ── Scraper ──────────────────────────────────────────────────────────────────
-SCRAPE_INTERVAL_MINUTES: int = int(os.getenv("SCRAPE_INTERVAL_MINUTES", "5"))
-MIN_DISCOUNT_PERCENT: int    = int(os.getenv("MIN_DISCOUNT_PERCENT", "15"))
-MAX_DEALS_PER_RUN: int       = int(os.getenv("MAX_DEALS_PER_RUN", "5"))
+SCRAPE_INTERVAL_MINUTES: int  = int(os.getenv("SCRAPE_INTERVAL_MINUTES", "5"))
+MIN_DISCOUNT_PERCENT: int     = int(os.getenv("MIN_DISCOUNT_PERCENT", "15"))
+MAX_DEALS_PER_RUN: int        = int(os.getenv("MAX_DEALS_PER_RUN", "5"))
+# Máximo de navegadores Chromium simultâneos — 2 cabe em container de 1.5GB
+PLAYWRIGHT_MAX_BROWSERS: int  = int(os.getenv("PLAYWRIGHT_MAX_BROWSERS", "2"))
+# Proxy residencial/datacenter para evasão de bloqueios (ex: http://user:pass@host:port)
+PROXY_URL: str                = os.getenv("PROXY_URL", "")
 
 # ── Parcelamento ─────────────────────────────────────────────────────────────
 # Quando o scraper não retornar dado real de parcelas, exibir estimativa calculada?
