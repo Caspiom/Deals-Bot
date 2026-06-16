@@ -1,6 +1,29 @@
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from src.config.settings import AFFILIATE_ID, AMAZON_ASSOCIATE_TAG
 
+# Domínios de agregadores que interceptam a comissão de afiliado.
+# Deals cujas URLs pertençam a esses domínios são descartados na pipeline.
+_AGGREGATOR_DOMAINS: frozenset[str] = frozenset({
+    "promobit.com.br",
+    "pelando.com.br",
+    "promoby.me",          # encurtador interno do Promobit
+    "zoom.com.br",
+    "buscape.com.br",
+    "bondfaro.com.br",
+    "comparaonline.com.br",
+    "menor-preco.com.br",
+    "buscapé.com.br",
+    "cuponomia.com.br",
+    "meliuz.com.br",
+})
+
+
+def is_commissionable(url: str) -> bool:
+    """Retorna True se a URL pertence a uma loja direta onde podemos injetar nossa tag de afiliado.
+    Retorna False para URLs de agregadores que retêm a comissão."""
+    domain = urlparse(url).netloc.lower().removeprefix("www.")
+    return not any(domain == agg or domain.endswith("." + agg) for agg in _AGGREGATOR_DOMAINS)
+
 
 def convert(url: str) -> str:
     """Converte URL de produto em link de afiliado. Pronto para receber integrações reais."""

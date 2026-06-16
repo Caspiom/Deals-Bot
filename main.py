@@ -9,11 +9,9 @@ import src.utils.logger  # noqa: F401 — aciona setup_logger()
 from src.config.settings import SCRAPE_INTERVAL_MINUTES, ENABLED_PUBLISHERS, SHOW_ESTIMATED_INSTALLMENTS
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
-from src.scrapers.pelando_scraper import PelandoScraper
-from src.scrapers.promobit_scraper import PromobitScraper
 from src.scrapers.mercadolivre_scraper import MercadoLivreScraper
 from src.scrapers.kabum_scraper import KabumScraper
-from src.services.affiliate import convert
+from src.services.affiliate import convert, is_commissionable
 from src.services.copywriter import generate as generate_tagline
 from src.services.installment_calculator import estimate as estimate_installments
 from src.services.dedup_filter import DedupFilter
@@ -66,12 +64,18 @@ async def run_cycle(
     # registra histórico de preço para TODOS os deals coletados (antes do filtro de dedup)
     dedup.record_prices(all_deals)
 
-    new_deals   = [d for d in all_deals if dedup.is_new(d)]
-    hot_reposts = [d for d in all_deals if not dedup.is_new(d) and dedup.can_repost(d)]
+    # Descarta deals de agregadores que retêm a comissão de afiliado (diretriz 4.11)
+    monetizable = [d for d in all_deals if is_commissionable(d.url)]
+    blocked = len(all_deals) - len(monetizable)
+    if blocked:
+        logger.warning("⛔ {} deal(s) bloqueado(s) por URL de agregador (sem comissão nossa).", blocked)
+
+    new_deals   = [d for d in monetizable if dedup.is_new(d)]
+    hot_reposts = [d for d in monetizable if not dedup.is_new(d) and dedup.can_repost(d)]
     to_publish  = new_deals + hot_reposts
     logger.info(
-        "{} deal(s) coletado(s) — {} novo(s), {} re-post(s) → publicando em {} plataforma(s).",
-        len(all_deals), len(new_deals), len(hot_reposts), len(publishers),
+        "{} deal(s) coletado(s) — {} bloqueado(s) — {} novo(s), {} re-post(s) → publicando em {} plataforma(s).",
+        len(all_deals), blocked, len(new_deals), len(hot_reposts), len(publishers),
     )
 
     for deal in to_publish:
@@ -102,7 +106,8 @@ async def run_cycle(
 async def main() -> None:
     logger.info("Deals Bot iniciando...")
 
-    scrapers: list[BaseScraper] = [PelandoScraper(), PromobitScraper(), MercadoLivreScraper(), KabumScraper()]
+    # Apenas scrapers de lojas diretas — ver diretriz 4.11 em docs/context.md
+    scrapers: list[BaseScraper] = [MercadoLivreScraper(), KabumScraper()]
     dedup = DedupFilter()
     publishers = _build_publishers()
 

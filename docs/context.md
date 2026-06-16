@@ -176,6 +176,34 @@ Deals ainda ativos nos scrapers são elegíveis para re-post baseado no desconto
 ### 4.10 Discord Bot — Configuração por Servidor
 O `DiscordPublisher` não usa canal fixo. Cada servidor Discord configura seu próprio canal via slash command `/set-channel #canal` (requer permissão "Gerenciar Servidor"). A configuração `guild_id → channel_id` fica salva na tabela `discord_guild_channels` do mesmo `deals.db`. Ao entrar em novo servidor, o bot envia mensagem de boas-vindas explicando o setup. Se o canal configurado for deletado, o bot loga warning e pula o servidor sem travar os demais.
 
+### 4.11 Filtro de Monetização — Proibido Dar Comissão a Agregadores
+**DIRETRIZ DE MONETIZAÇÃO:** O bot NÃO DEVE dar comissão de graça para agregadores concorrentes. É estritamente proibido enviar para os cards finais do Telegram ofertas cujos links finais pertençam ou passem pelo redirecionamento de agregadores terceiros (como Promobit e Pelando), pois a comissão fica para eles.
+
+**Implementação:** A função `is_commissionable(url)` em `src/services/affiliate.py` mantém uma lista negra de domínios de agregadores (`_AGGREGATOR_DOMAINS`). O `run_cycle()` em `main.py` descarta silenciosamente qualquer deal cujo `url` pertença a essa lista antes de entrar na fila de publicação. Paralelamente, os scrapers `PromobitScraper` e `PelandoScraper` são mantidos no codebase mas **removidos da lista ativa** de `main.py` — pois nunca expõem a URL direta da loja final.
+
+**Lojas diretas permitidas — alvo do motor de captação:**
+
+| Loja | Status | Programa de Afiliado | Observação |
+|---|---|---|---|
+| Amazon | ✅ Integrado | Amazon Associados (`tag=`) | Tag `achadin09c587-20` configurada |
+| Mercado Livre | ✅ Integrado | Parceiros ML (`partner_id=`) | Scraper Playwright ativo |
+| Magazine Luiza | ✅ Integrado | Parceiros Magalu (`partner_id=`) | Via `affiliate.py` |
+| KaBuM | ✅ Scraper ativo | Awin Brasil / Lomadee | URL direta; integração afiliado pendente |
+| AliExpress | 🔲 Pendente | Programa AliExpress Portals | Credenciais já no `.env` |
+| Shopee | 🔲 Pendente | Shopee Affiliates | Scraper pendente |
+| Casas Bahia | 🔲 Pendente | Awin Brasil | Produto de volume alto; scraper viável |
+| Netshoes | 🔲 Pendente | Lomadee / Awin | Forte em calçados e esportes |
+| Samsung BR | 🔲 Pendente | Awin Brasil | Lançamentos e campanhas de eletrônicos |
+| Americanas | 🔲 Pendente | Awin Brasil | Marketplace de alto volume |
+| Submarino | 🔲 Pendente | Awin Brasil | Mesmo grupo das Americanas (B2W) |
+| Centauro | 🔲 Pendente | Lomadee | Esportes e artigos fitness |
+| Dafiti | 🔲 Pendente | Awin Brasil | Moda e calçados |
+| Shein BR | 🔲 Pendente | Shein Affiliates | Alto volume; moda popular |
+| Dell BR | 🔲 Pendente | Awin Brasil | Notebooks e periféricos |
+| Lenovo BR | 🔲 Pendente | Awin Brasil | Notebooks e desktops |
+| Pichau | 🔲 Pendente | Programa próprio | Hardware e periféricos gamer |
+| Terabyte Shop | 🔲 Pendente | Programa próprio | Hardware entusiasta |
+
 ---
 
 ## 5. Estado Atual e Próximos Passos
