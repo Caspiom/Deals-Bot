@@ -1,10 +1,11 @@
 import re
 from playwright.async_api import Page
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
+from src.config.settings import MIN_DISCOUNT_PERCENT
 from src.models import Deal
 from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
 from src.services.installment_calculator import parse_installment_string
+from src.utils.price_parser import parse_brl as _parse_brl
 
 _OFFERS_URL = "https://www.magazineluiza.com.br/ofertas/"
 
@@ -47,16 +48,6 @@ _EXTRACT_JS = """() => {
         }).filter(i => i.url && i.title && i.price);
 }"""
 
-
-def _parse_brl(text: str | None) -> float | None:
-    if not text:
-        return None
-    cleaned = re.sub(r"[R$\s\xa0]", "", text)
-    cleaned = cleaned.replace(".", "").replace(",", ".")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
 
 
 def _parse_discount_pct(text: str | None) -> int | None:
@@ -105,22 +96,30 @@ class MagaluScraper(PlaywrightBaseScraper):
                 seen_urls.add(base_url)
 
                 discount_pct = _parse_discount_pct(item.get("discount"))
+                price        = _parse_brl(item.get("price"))
+                old_price    = _parse_brl(item.get("old_price"))
+
+                if discount_pct is None and old_price and old_price > (price or 0):
+                    discount_pct = int((1 - (price or 0) / old_price) * 100)
+
+                sku_m = re.search(r'/p/([a-z0-9]+)/', base_url, re.I)
+                sku   = sku_m.group(1) if sku_m else base_url[-20:]
+                logger.info(
+                    "Magalu [dump] {} | '{}' | preço: '{}' → {} | old: '{}' → {} | desc: '{}' → {}%",
+                    sku,
+                    (item.get("title") or "")[:45],
+                    item.get("price"),     f"{price:.2f}"     if price     is not None else "NONE",
+                    item.get("old_price"), f"{old_price:.2f}" if old_price is not None else "NONE",
+                    item.get("discount"),  discount_pct if discount_pct is not None else "NONE",
+                )
+
                 if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                    logger.info("Magalu [dump] {} → DROP: desconto {}% < mínimo {}%", sku, discount_pct, MIN_DISCOUNT_PERCENT)
                     continue
 
-                price = _parse_brl(item.get("price"))
                 if price is None or price <= 0:
-                    logger.debug(
-                        "Magalu: preço inválido em '{}' — descartando.",
-                        (item.get("title") or "?")[:40],
-                    )
+                    logger.info("Magalu [dump] {} → DROP: preço inválido ('{}')", sku, item.get("price"))
                     continue
-
-                old_price = None
-                try:
-                    old_price = _parse_brl(item.get("old_price"))
-                except Exception:
-                    pass
 
                 parsed = parse_installment_string(item.get("installment") or "")
                 n_inst, v_inst = parsed if parsed else (None, None)
@@ -147,9 +146,6 @@ class MagaluScraper(PlaywrightBaseScraper):
                     (item.get("title") or "?")[:40], exc,
                 )
                 continue
-
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
 
         logger.info("Magalu: {} deals válidos após filtros.", len(deals))
         return deals

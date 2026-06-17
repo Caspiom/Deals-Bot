@@ -1,93 +1,81 @@
 import re
 from playwright.async_api import Page
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
+from src.config.settings import MIN_DISCOUNT_PERCENT
 from src.models import Deal
 from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
+from src.utils.price_parser import parse_brl as _parse_brl
 
-# Página central de Ofertas do Dia da Amazon BR — sem necessidade de PA API
-_DEALS_URL = "https://www.amazon.com.br/deals"
+# URL pré-filtrada: apenas deals com 40-90% OFF, evita poluição de produtos sem desconto real
+_DEALS_URL = (
+    "https://www.amazon.com.br/events/deals"
+    "?discounts-widget=%2522%257B%255C%2522state%255C%2522%253A%257B%255C%2522rangeRefinement"
+    "Filters%255C%2522%253A%257B%255C%2522percentOff%255C%2522%253A%257B%255C%2522min%255C%2522"
+    "%253A40%252C%255C%2522max%255C%2522%253A90%257D%257D%257D%252C%255C%2522version%255C%2522"
+    "%253A1%257D%2522"
+)
 
-# ASIN: 10 caracteres A-Z0-9 logo após /dp/
-_ASIN_RE = re.compile(r"/dp/([A-Z0-9]{10})")
-
-# Ancora em links de produto /dp/{ASIN} — estrutura estável há +10 anos.
-# Usa .a-offscreen para preços (spans legíveis por screen readers, mais confiável
-# que parsear whole+fraction separados).
+# Extrator "Selector Agnostic": ancora nos links /dp/ e sobe via closest().
+# Seletores confirmados via inspeção do DOM da URL /events/deals com filtro 40-90%.
 _EXTRACT_JS = """() => {
     const asinRe = /\\/dp\\/([A-Z0-9]{10})/;
-    const seen = new Set();
-    const results = [];
+    const brlRe  = /R\\$\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2})/;
+    const discRe = /(\\d+)%\\s*off/i;
 
-    for (const link of document.querySelectorAll('a[href*="/dp/"]')) {
-        try {
-            const m = asinRe.exec(link.href);
-            if (!m || seen.has(m[1])) continue;
-            seen.add(m[1]);
+    const links    = Array.from(document.querySelectorAll('a[href*="/dp/"]'));
+    const seenCards = new Set();
+    const results  = [];
 
-            const card = (
-                link.closest('[class*="DealCard"]') ||
-                link.closest('[data-testid*="deal"]') ||
-                link.closest('[class*="deal-card"]') ||
-                link.closest('li') ||
-                link.parentElement?.parentElement
-            );
+    for (const link of links) {
+        // Sobe para o card contêiner usando os seletores confirmados no DOM real.
+        // [data-testid="product-card"] e [class*="GridItem-module__container"]
+        // são os contêineres raiz da view /events/deals com filtro aplicado.
+        const card = (
+            link.closest('[data-testid="product-card"]') ||
+            link.closest('[class*="GridItem-module__container"]')
+        );
+        if (!card || seenCards.has(card)) continue;
+        seenCards.add(card);
 
-            const titleEl = link.querySelector('span') ||
-                            card?.querySelector('h2 span, [class*="title"] span');
+        const href       = link.href;
+        const asinMatch  = href.match(asinRe);
+        if (!asinMatch) continue;
+        const asin = asinMatch[1];
 
-            // .a-offscreen contém o preço completo ("R$ 1.299,00") — mais fácil de parsear
-            const offscreens = Array.from((card || link).querySelectorAll('.a-offscreen'));
-            const currentEl = offscreens.find(el =>
-                !el.closest('s') && !el.closest('.a-text-strike') && el.innerText.includes('R$')
-            );
-            const oldEl = offscreens.find(el =>
-                (el.closest('s') || el.closest('.a-text-strike')) && el.innerText.includes('R$')
-            );
+        // Título: img[class*="ProductCardImage"][alt] → p[id*="title-"] truncate-full
+        let title = card.querySelector('img[class*="ProductCardImage"]')?.getAttribute('alt')?.trim() ?? null;
+        if (!title || title.length < 5) {
+            title = (
+                card.querySelector('p[id*="title-"] [class*="truncate-full"]') ??
+                card.querySelector('[class*="ProductCard-module__title"] [class*="truncate-full"]')
+            )?.innerText?.trim() ?? null;
+        }
+        if (!title || title.length < 5) continue;
 
-            const discountEl = card?.querySelector(
-                '[class*="badgeLabel"] span, [class*="percent-off"], ' +
-                '[class*="savings"] span, [class*="discount"] span'
-            );
+        // Preço atual: [class*="priceToPay"] .a-offscreen
+        const priceStr = card.querySelector('[class*="priceToPay"] .a-offscreen')?.innerText?.trim() ?? null;
 
-            const imgEl = (card || link).querySelector(
-                'img[src*="amazon.com"], img[src*="ssl-images-amazon"]'
-            );
+        // Preço antigo: [class*="text-price"] .a-offscreen → span[aria-hidden]
+        let oldPriceStr = card.querySelector('[class*="text-price"] .a-offscreen')?.innerText?.trim() ?? null;
+        if (!oldPriceStr) {
+            oldPriceStr = card.querySelector('[class*="text-price"] span[aria-hidden="true"]')?.innerText?.trim() ?? null;
+        }
 
-            results.push({
-                url:       link.href,
-                asin:      m[1],
-                title:     titleEl?.innerText?.trim() ?? null,
-                price:     currentEl?.innerText?.trim() ?? null,
-                old_price: oldEl?.innerText?.trim() ?? null,
-                discount:  discountEl?.innerText?.trim() ?? null,
-                image:     imgEl?.src ?? null,
-            });
-        } catch (_) {}
+        // Desconto: badgeContainer contém "60% off"
+        const discountStr = card.querySelector('[class*="badgeContainer"]')?.innerText?.trim() ?? null;
+
+        results.push({
+            id:        asin,
+            title:     title,
+            url:       href,
+            price:     priceStr,
+            old_price: oldPriceStr,
+            discount:  discountStr,
+            image:     card.querySelector('img')?.src ?? null,
+        });
     }
-    return results.filter(r => r.asin && r.title);
+    return results;
 }"""
-
-
-def _parse_brl(text: str | None) -> float | None:
-    if not text:
-        return None
-    cleaned = re.sub(r"[R$\s\xa0]", "", text)
-    if "," in cleaned and "." in cleaned:
-        # "1.299,00" → BRL completo: ponto = milhar, vírgula = decimal
-        cleaned = cleaned.replace(".", "").replace(",", ".")
-    elif "," in cleaned:
-        # "299,90" → só decimal BRL
-        cleaned = cleaned.replace(",", ".")
-    elif "." in cleaned:
-        # "1.000" → ponto com 3 dígitos = separador de milhar BRL
-        parts = cleaned.split(".")
-        if len(parts) == 2 and len(parts[1]) == 3 and parts[1].isdigit():
-            cleaned = parts[0] + parts[1]
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
 
 
 def _parse_discount_pct(text: str | None) -> int | None:
@@ -108,40 +96,70 @@ class AmazonScraper(PlaywrightBaseScraper):
         except Exception:
             pass
 
-        try:
-            await page.wait_for_selector('a[href*="/dp/"]', timeout=15000)
-        except Exception:
-            logger.warning("Amazon: nenhum produto encontrado na página de ofertas.")
-            return []
+        for _ in range(8):
+            await page.evaluate("window.scrollBy(0, 800)")
+            await page.wait_for_timeout(700)
+        await page.evaluate("window.scrollTo(0, 0)")
+        await page.wait_for_timeout(500)
 
-        for i in range(5):
-            await page.evaluate("window.scrollBy(0, window.innerHeight)")
-            await page.wait_for_timeout(500 + (i % 3) * 200)
+        # ── DEBUG TEMPORÁRIO ──────────────────────────────────────────────────
+        page_title = await page.title()
+        logger.info("Amazon [debug]: título='{}' (screenshot após scroll)", page_title)
+        await page.screenshot(path="data/debug_amazon.png", full_page=False)
+        dp_count = await page.evaluate("document.querySelectorAll('a[href*=\"/dp/\"]').length")
+        logger.info("Amazon [debug]: {} links /dp/ no DOM após scroll", dp_count)
+        # ─────────────────────────────────────────────────────────────────────
 
         raw: list[dict] = await page.evaluate(_EXTRACT_JS)
-        logger.info("Amazon: {} cards extraídos do DOM.", len(raw))
+        logger.info("Amazon: {} cards brutos extraídos (antes de filtros).", len(raw))
 
-        seen_asins: set[str] = set()
+        seen_asins:  set[str] = set()
+        seen_titles: set[str] = set()
         deals: list[Deal] = []
 
         for item in raw:
             try:
-                asin = item.get("asin", "")
+                asin = item.get("id", "")   # JS agora retorna campo "id" (era "asin")
                 if not asin or asin in seen_asins:
                     continue
                 seen_asins.add(asin)
 
-                price = _parse_brl(item.get("price"))
-                if not price or price <= 0:
+                # Dedup intra-ciclo por título normalizado: evita o mesmo produto
+                # com ASINs diferentes (cores, tamanhos) spammar o canal no mesmo ciclo.
+                title_key = re.sub(r'\s+', ' ', (item.get("title") or "").lower().strip())[:60]
+                if title_key and title_key in seen_titles:
+                    logger.info("Amazon [dump] {} → DROP: título duplicado no ciclo ('{}')", asin, title_key[:40])
                     continue
+                if title_key:
+                    seen_titles.add(title_key)
 
+                price     = _parse_brl(item.get("price"))
                 old_price = _parse_brl(item.get("old_price"))
                 discount_pct = _parse_discount_pct(item.get("discount"))
 
-                if discount_pct is None and old_price and old_price > price:
-                    discount_pct = int((1 - price / old_price) * 100)
+                if discount_pct is None and old_price and old_price > (price or 0):
+                    discount_pct = int((1 - (price or 0) / old_price) * 100)
+
+                # ── DUMP DIAGNÓSTICO ──────────────────────────────────────────
+                logger.info(
+                    "Amazon [dump] {} | '{}' | preço: '{}' → {} | old: '{}' → {} | desc: '{}' → {}%",
+                    asin,
+                    (item.get("title") or "")[:45],
+                    item.get("price"),    f"{price:.2f}"     if price     is not None else "NONE",
+                    item.get("old_price"), f"{old_price:.2f}" if old_price is not None else "NONE",
+                    item.get("discount"), discount_pct if discount_pct is not None else "NONE",
+                )
+                # ─────────────────────────────────────────────────────────────
+
+                if not price or price <= 0:
+                    logger.info("Amazon [dump] {} → DROP: preço inválido ('{}')", asin, item.get("price"))
+                    continue
 
                 if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                    logger.info(
+                        "Amazon [dump] {} → DROP: desconto {}% < mínimo {}%",
+                        asin, discount_pct, MIN_DISCOUNT_PERCENT,
+                    )
                     continue
 
                 image = item.get("image") or ""
@@ -156,12 +174,10 @@ class AmazonScraper(PlaywrightBaseScraper):
                     source=self.name,
                     store="Amazon",
                 ))
-            except Exception as exc:
-                logger.warning("Amazon: erro ao processar ASIN={}: {}", item.get("asin", "?"), exc)
-                continue
 
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
+            except Exception as exc:
+                logger.warning("Amazon: erro ao processar ASIN={}: {}", item.get("id", "?"), exc)
+                continue
 
         logger.info("Amazon: {} deals válidos após filtros.", len(deals))
         return deals

@@ -8,7 +8,7 @@ from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
 _MOCK_CARDS = [
     {
         "url":       "https://www.amazon.com.br/Notebook-Dell-Inspiron/dp/B0CX12345Y/ref=sr_1_1",
-        "asin":      "B0CX12345Y",
+        "id":        "B0CX12345Y",
         "title":     "Notebook Dell Inspiron 15 8GB 256GB SSD",
         "price":     "R$ 2.499,00",
         "old_price": "R$ 4.999,00",
@@ -17,7 +17,7 @@ _MOCK_CARDS = [
     },
     {
         "url":       "https://www.amazon.com.br/dp/B0AB67890Z",
-        "asin":      "B0AB67890Z",
+        "id":        "B0AB67890Z",
         "title":     "Smart TV Samsung 55\" 4K QLED",
         "price":     "R$ 1.899,00",
         "old_price": "R$ 3.200,00",
@@ -26,7 +26,7 @@ _MOCK_CARDS = [
     },
     {
         "url":       "https://www.amazon.com.br/dp/B0LOWDISCT",
-        "asin":      "B0LOWDISCT",
+        "id":        "B0LOWDISCT",
         "title":     "Produto com desconto abaixo do mínimo",
         "price":     "R$ 99,00",
         "old_price": "R$ 101,00",
@@ -35,7 +35,7 @@ _MOCK_CARDS = [
     },
     {
         "url":       "https://www.amazon.com.br/dp/B0NOPRICE0",
-        "asin":      "B0NOPRICE0",
+        "id":        "B0NOPRICE0",
         "title":     "Produto sem preço",
         "price":     None,
         "old_price": None,
@@ -146,22 +146,23 @@ async def test_scrape_deduplicates_by_asin(scraper):
     assert len([d for d in deals if "B0CX12345Y" in d.url]) == 1
 
 @pytest.mark.asyncio
-async def test_scrape_respects_max_deals(scraper):
+async def test_scraper_returns_all_qualified_deals(scraper):
+    # O cap pertence ao main.py; o scraper deve devolver TODOS os deals válidos.
     many = [
         {
-            "url": f"https://www.amazon.com.br/dp/B{i:09d}",
-            "asin": f"B{i:09d}",
-            "title": f"Produto {i}",
-            "price": "R$ 100,00",
+            "url":       f"https://www.amazon.com.br/dp/B{i:09d}",
+            "id":        f"B{i:09d}",
+            "title":     f"Produto {i}",
+            "price":     "R$ 100,00",
             "old_price": "R$ 200,00",
-            "discount": "-50%",
-            "image": None,
+            "discount":  "-50%",
+            "image":     None,
         }
         for i in range(MAX_DEALS_PER_RUN * 4)
     ]
     page = _make_page_mock(many)
     deals = await scraper._scrape(page)
-    assert len(deals) <= MAX_DEALS_PER_RUN
+    assert len(deals) == MAX_DEALS_PER_RUN * 4
 
 @pytest.mark.asyncio
 async def test_scrape_calculates_discount_from_prices(scraper):
@@ -172,7 +173,7 @@ async def test_scrape_calculates_discount_from_prices(scraper):
 
 @pytest.mark.asyncio
 async def test_scrape_bad_item_does_not_break_batch(scraper):
-    bad = {"url": None, "asin": "B0BADITEM1", "title": "Mal formado", "price": "invalido", "old_price": None, "discount": None, "image": None}
+    bad = {"url": None, "id": "B0BADITEM1", "title": "Mal formado", "price": "invalido", "old_price": None, "discount": None, "image": None}
     page = _make_page_mock([bad, _MOCK_CARDS[0]])
     deals = await scraper._scrape(page)
     assert any("Dell" in d.title for d in deals)

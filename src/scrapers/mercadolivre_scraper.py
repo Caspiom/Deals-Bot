@@ -1,10 +1,11 @@
 import re
 from playwright.async_api import Page
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
+from src.config.settings import MIN_DISCOUNT_PERCENT
 from src.models import Deal
 from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
 from src.services.installment_calculator import parse_installment_string
+from src.utils.price_parser import parse_brl as _parse_brl
 
 # Página central de Ofertas do Dia — todos os cards com desconto real
 _OFFERS_URL = "https://www.mercadolivre.com.br/ofertas"
@@ -43,12 +44,6 @@ _EXTRACT_JS = """() => {
 }"""
 
 
-def _parse_brl(text: str) -> float | None:
-    cleaned = re.sub(r"[R$\s]", "", text).replace(".", "").replace(",", ".")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
 
 
 def _parse_discount_pct(text: str) -> int | None:
@@ -90,23 +85,31 @@ class MercadoLivreScraper(PlaywrightBaseScraper):
                 seen_urls.add(base_url)
 
                 discount_pct = _parse_discount_pct(item.get("discount") or "")
+                price        = _parse_brl(item.get("current") or "")
+                old_price_raw = item.get("original") or ""
+                old_price    = _parse_brl(old_price_raw) if old_price_raw else None
+
+                if discount_pct is None and old_price and old_price > (price or 0):
+                    discount_pct = int((1 - (price or 0) / old_price) * 100)
+
+                pid_m = re.search(r'(MLB-?\d+)', url)
+                pid   = pid_m.group(1) if pid_m else url[-20:]
+                logger.info(
+                    "ML [dump] {} | '{}' | preço: '{}' → {} | old: '{}' → {} | desc: '{}' → {}%",
+                    pid,
+                    (item.get("title") or "")[:45],
+                    item.get("current"),  f"{price:.2f}"     if price     is not None else "NONE",
+                    old_price_raw,        f"{old_price:.2f}" if old_price is not None else "NONE",
+                    item.get("discount"), discount_pct if discount_pct is not None else "NONE",
+                )
+
                 if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                    logger.info("ML [dump] {} → DROP: desconto {}% < mínimo {}%", pid, discount_pct, MIN_DISCOUNT_PERCENT)
                     continue
 
-                price = _parse_brl(item.get("current") or "")
                 if price is None or price <= 0:
-                    logger.debug(
-                        "MercadoLivre: preço inválido em '{}' — descartando.",
-                        (item.get("title") or "?")[:40],
-                    )
+                    logger.info("ML [dump] {} → DROP: preço inválido ('{}')", pid, item.get("current"))
                     continue
-
-                old_price = None
-                if item.get("original"):
-                    try:
-                        old_price = _parse_brl(item["original"])
-                    except Exception:
-                        pass
 
                 parsed = parse_installment_string(item.get("installment") or "")
                 n_inst, v_inst = parsed if parsed else (None, None)
@@ -140,9 +143,6 @@ class MercadoLivreScraper(PlaywrightBaseScraper):
                     (item.get("title") or "?")[:40], exc,
                 )
                 continue
-
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
 
         logger.info("MercadoLivre: {} deals válidos após filtros.", len(deals))
         return deals

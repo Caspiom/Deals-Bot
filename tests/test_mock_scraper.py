@@ -15,9 +15,10 @@ async def test_fetch_returns_list(scraper):
 
 
 @pytest.mark.asyncio
-async def test_fetch_respects_max_deals(scraper):
+async def test_fetch_returns_all_qualified_deals(scraper):
+    # O cap pertence ao main.py; o scraper devolve tudo que passa em MIN_DISCOUNT_PERCENT.
     deals = await scraper.fetch()
-    assert len(deals) <= MAX_DEALS_PER_RUN
+    assert len(deals) > MAX_DEALS_PER_RUN
 
 
 @pytest.mark.asyncio

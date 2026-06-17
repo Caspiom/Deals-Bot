@@ -1,6 +1,6 @@
 import httpx
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN, PROXY_URL
+from src.config.settings import MIN_DISCOUNT_PERCENT, PROXY_URL
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
 from src.services.installment_calculator import parse_installment_string
@@ -26,7 +26,7 @@ class KabumScraper(BaseScraper):
                 _API_URL,
                 params={
                     "page_number": 1,
-                    "page_size": MAX_DEALS_PER_RUN * 10,
+                    "page_size": "100",
                     "sort": "most_discount_percentage",
                     "is_offer": "true",
                 },
@@ -47,9 +47,9 @@ class KabumScraper(BaseScraper):
                     continue
                 seen_ids.add(product_id)
 
-                price = float(attr.get("price_with_discount") or 0)
+                price          = float(attr.get("price_with_discount") or 0)
                 original_price = float(attr.get("price") or 0)
-                discount_pct = int(attr.get("discount_percentage") or 0)
+                discount_pct   = int(attr.get("discount_percentage") or 0)
 
                 if price <= 0:
                     continue
@@ -57,7 +57,15 @@ class KabumScraper(BaseScraper):
                 if discount_pct == 0 and original_price > price:
                     discount_pct = int((1 - price / original_price) * 100)
 
+                logger.info(
+                    "KaBuM [dump] {} | '{}' | preço: {:.2f} | old: {:.2f} | desc: {}%",
+                    product_id,
+                    (attr.get("title") or "")[:45],
+                    price, original_price, discount_pct,
+                )
+
                 if discount_pct < MIN_DISCOUNT_PERCENT:
+                    logger.info("KaBuM [dump] {} → DROP: desconto {}% < mínimo {}%", product_id, discount_pct, MIN_DISCOUNT_PERCENT)
                     continue
 
                 if not attr.get("available", True):
@@ -104,9 +112,6 @@ class KabumScraper(BaseScraper):
                     item.get("id", "?"), exc,
                 )
                 continue
-
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
 
         logger.info("KaBuM: {} deals válidos após filtros.", len(deals))
         return deals

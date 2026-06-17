@@ -1,20 +1,25 @@
 import re
 from playwright.async_api import Page
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
+from src.config.settings import MIN_DISCOUNT_PERCENT
 from src.models import Deal
 from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
+from src.utils.price_parser import parse_brl as _parse_brl
 
 # httpx retorna 403 — Shopee exige cookies de sessão real; Playwright resolve isso.
 #
 # Ordem de prioridade de fontes:
-#  1. Flash Sale — produtos com 40-80% OFF, renovados a cada poucas horas
-#  2. Buscas por categoria com sortBy=price (os mais baratos tendem a ter maior desconto)
+#  1. Shopee Deals — página pública de promoções sem exigir login
+#  2. Buscas por categoria com sortBy=sales (mais vendidos = produtos com oferta real)
+#     Evitamos sortBy=price&order=asc pois retorna os itens mais baratos, não os mais descontados.
 _SEARCH_URLS = [
-    "https://shopee.com.br/flash_sale",
-    "https://shopee.com.br/search?keyword=smartphone&sortBy=price&order=asc",
-    "https://shopee.com.br/search?keyword=notebook&sortBy=price&order=asc",
-    "https://shopee.com.br/search?keyword=eletrodomestico&sortBy=price&order=asc",
+    "https://shopee.com.br/m/shopee-deals",
+    "https://shopee.com.br/search?keyword=smartphone&sortBy=sales&order=desc",
+    "https://shopee.com.br/search?keyword=notebook&sortBy=sales&order=desc",
+    "https://shopee.com.br/search?keyword=televisao&sortBy=sales&order=desc",
+    "https://shopee.com.br/search?keyword=fone+de+ouvido&sortBy=sales&order=desc",
+    "https://shopee.com.br/search?keyword=eletrodomestico&sortBy=sales&order=desc",
+    "https://shopee.com.br/search?keyword=ar+condicionado&sortBy=sales&order=desc",
 ]
 
 # Links de produto Shopee terminam com -i.{shopid}.{itemid}
@@ -73,15 +78,6 @@ _EXTRACT_JS = """() => {
 }"""
 
 
-def _parse_brl(text: str | None) -> float | None:
-    if not text:
-        return None
-    cleaned = re.sub(r"[R$\s\xa0]", "", text).replace(".", "").replace(",", ".")
-    try:
-        return float(cleaned.strip())
-    except ValueError:
-        return None
-
 
 def _parse_discount_pct(text: str | None) -> int | None:
     if not text:
@@ -98,26 +94,29 @@ class ShopeeScraper(PlaywrightBaseScraper):
         deals: list[Deal] = []
 
         for url in _SEARCH_URLS:
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
 
             try:
                 await page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-                # Aguarda produtos aparecerem antes de scrollar — crítico para flash_sale
+                # Aguarda link de produto com padrão -i.{shopid}.{itemid}
+                # seletor genérico (a[href]) seria satisfeito pela página de login após redirect
                 try:
-                    await page.wait_for_selector('a[href]', timeout=8000)
+                    await page.wait_for_selector('a[href*="-i."]', timeout=10000)
                 except Exception:
-                    logger.warning("Shopee: timeout aguardando links em {}.", url)
+                    final_url = page.url
+                    logger.warning(
+                        "Shopee: nenhum produto encontrado em {} (URL final: {}).",
+                        url, final_url,
+                    )
                     continue
 
-                for i in range(4):
+                for i in range(5):
                     await page.evaluate("window.scrollBy(0, window.innerHeight)")
                     await page.wait_for_timeout(600 + (i % 2) * 200)
 
                 raw: list[dict] = await page.evaluate(_EXTRACT_JS)
-                source_name = url.split("/")[-1].split("?")[0] or "flash_sale"
-                logger.debug("Shopee [{}]: {} cards extraídos.", source_name, len(raw))
+                source_name = url.split("/")[-1].split("?")[0] or "deals"
+                logger.info("Shopee [{}]: {} cards extraídos.", source_name, len(raw))
 
             except Exception as exc:
                 logger.warning("Shopee: erro ao navegar em {}: {}", url, exc)
@@ -131,16 +130,27 @@ class ShopeeScraper(PlaywrightBaseScraper):
                     seen_ids.add(item_id)
 
                     discount_pct = _parse_discount_pct(item.get("discount"))
-                    price = _parse_brl(item.get("price"))
-                    old_price = _parse_brl(item.get("old_price"))
+                    price        = _parse_brl(item.get("price"))
+                    old_price    = _parse_brl(item.get("old_price"))
+
+                    if discount_pct is None and old_price and old_price > (price or 0):
+                        discount_pct = int((1 - (price or 0) / old_price) * 100)
+
+                    logger.info(
+                        "Shopee [dump] {} | '{}' | preço: '{}' → {} | old: '{}' → {} | desc: '{}' → {}%",
+                        item_id,
+                        (item.get("title") or "")[:45],
+                        item.get("price"),     f"{price:.2f}"     if price     is not None else "NONE",
+                        item.get("old_price"), f"{old_price:.2f}" if old_price is not None else "NONE",
+                        item.get("discount"),  discount_pct if discount_pct is not None else "NONE",
+                    )
 
                     if not price or price <= 0:
+                        logger.info("Shopee [dump] {} → DROP: preço inválido ('{}')", item_id, item.get("price"))
                         continue
 
-                    if discount_pct is None and old_price and old_price > price:
-                        discount_pct = int((1 - price / old_price) * 100)
-
                     if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                        logger.info("Shopee [dump] {} → DROP: desconto {}% < mínimo {}%", item_id, discount_pct, MIN_DISCOUNT_PERCENT)
                         continue
 
                     image = item.get("image") or ""
@@ -163,9 +173,6 @@ class ShopeeScraper(PlaywrightBaseScraper):
                         (item.get("title") or "?")[:40], exc,
                     )
                     continue
-
-                if len(deals) >= MAX_DEALS_PER_RUN:
-                    break
 
         logger.info("Shopee: {} deals válidos após filtros.", len(deals))
         return deals

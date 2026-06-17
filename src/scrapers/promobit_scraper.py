@@ -1,6 +1,6 @@
 import httpx
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
+from src.config.settings import MIN_DISCOUNT_PERCENT
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
 
@@ -21,7 +21,7 @@ class PromobitScraper(BaseScraper):
         async with httpx.AsyncClient(headers=_HEADERS, timeout=15) as client:
             resp = await client.get(
                 _API_URL,
-                params={"sort": "hot", "limit": MAX_DEALS_PER_RUN * 3},
+                params={"sort": "hot", "limit": 100},
             )
             resp.raise_for_status()
             data = resp.json()
@@ -63,9 +63,6 @@ class PromobitScraper(BaseScraper):
                 store=store,
                 coupon_code=coupon_code,
             ))
-
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
 
         logger.info("Promobit: {} deals válidos após filtros.", len(deals))
         return deals

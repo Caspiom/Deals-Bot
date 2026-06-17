@@ -1,7 +1,7 @@
 import re
 from playwright.async_api import Page
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
+from src.config.settings import MIN_DISCOUNT_PERCENT
 from src.models import Deal
 from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
 
@@ -97,9 +97,6 @@ class PelandoScraper(PlaywrightBaseScraper):
                 store=item.get("store") or "",
                 coupon_code=coupon_code,
             ))
-
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
 
         logger.info("Pelando: {} deals válidos após filtros.", len(deals))
         return deals

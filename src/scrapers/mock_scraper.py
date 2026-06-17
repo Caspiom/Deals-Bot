@@ -1,6 +1,6 @@
 import asyncio
 import random
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
+from src.config.settings import MIN_DISCOUNT_PERCENT
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
 
@@ -98,10 +98,8 @@ class MockScraper(BaseScraper):
     async def fetch(self) -> list[Deal]:
         await asyncio.sleep(0.1)  # simula latência de rede
 
-        sample = random.sample(_PRODUCT_POOL, k=min(MAX_DEALS_PER_RUN + 3, len(_PRODUCT_POOL)))
-
         deals: list[Deal] = []
-        for item in sample:
+        for item in random.sample(_PRODUCT_POOL, k=len(_PRODUCT_POOL)):
             deal = Deal(
                 title=item["title"],
                 url=item["url"],
@@ -113,4 +111,4 @@ class MockScraper(BaseScraper):
             if deal.discount_pct is not None and deal.discount_pct >= MIN_DISCOUNT_PERCENT:
                 deals.append(deal)
 
-        return deals[:MAX_DEALS_PER_RUN]
+        return deals

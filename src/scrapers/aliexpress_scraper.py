@@ -4,7 +4,6 @@ import httpx
 from loguru import logger
 from src.config.settings import (
     MIN_DISCOUNT_PERCENT,
-    MAX_DEALS_PER_RUN,
     ALIEXPRESS_APP_KEY,
     ALIEXPRESS_SECRET_KEY,
     ALIEXPRESS_TRACKING_ID,
@@ -30,16 +29,24 @@ def _sign(params: dict, secret: str) -> str:
     return hashlib.md5(raw.encode("utf-8")).hexdigest().upper()
 
 
+import re as _re
+_BRL_RE = _re.compile(r'[\d.,]+')
+
 def _parse_price(value: str | None) -> float | None:
     if not value:
         return None
-    cleaned = str(value).replace("BRL", "").replace("R$", "").strip()
-    if "," in cleaned and "." in cleaned:
-        cleaned = cleaned.replace(".", "").replace(",", ".")
-    elif "," in cleaned:
-        cleaned = cleaned.replace(",", ".")
+    # Remove prefixos "BRL", "R$", espaços e caracteres não numéricos antes de parsear
+    text = str(value).replace("BRL", "").replace("R$", "").strip()
+    m = _BRL_RE.search(text)
+    if not m:
+        return None
+    cleaned = m.group(0)
+    if ',' in cleaned and '.' in cleaned:
+        cleaned = cleaned.replace('.', '').replace(',', '.')
+    elif ',' in cleaned:
+        cleaned = cleaned.replace(',', '.')
     try:
-        return float(cleaned.strip())
+        return float(cleaned)
     except ValueError:
         return None
 
@@ -62,7 +69,7 @@ class AliExpressScraper(BaseScraper):
             "v": "2.0",
             "fields": _FIELDS,
             "page_no": "1",
-            "page_size": str(min(MAX_DEALS_PER_RUN * 5, 50)),
+            "page_size": "50",
             "sort": "LAST_VOLUME_DESC",
             "target_currency": "BRL",
             "target_language": "PT",
@@ -110,12 +117,27 @@ class AliExpressScraper(BaseScraper):
                 except (ValueError, TypeError):
                     discount_pct = 0
 
-                if discount_pct < MIN_DISCOUNT_PERCENT:
-                    continue
-
-                price = _parse_price(p.get("local_sale_price")) or _parse_price(p.get("sale_price"))
-                old_price = _parse_price(p.get("local_original_price")) or _parse_price(p.get("original_price"))
+                price         = _parse_price(p.get("local_sale_price")) or _parse_price(p.get("sale_price"))
+                old_price     = _parse_price(p.get("local_original_price")) or _parse_price(p.get("original_price"))
                 has_local_price = bool(_parse_price(p.get("local_sale_price")))
+
+                logger.info(
+                    "AliExpress [dump] {} | '{}' | preço: '{}' → {} | old: '{}' → {} | desc: {}%",
+                    p.get("product_id", "?"),
+                    str(p.get("product_title", ""))[:45],
+                    p.get("local_sale_price") or p.get("sale_price"),
+                    f"{price:.2f}" if price is not None else "NONE",
+                    p.get("local_original_price") or p.get("original_price"),
+                    f"{old_price:.2f}" if old_price is not None else "NONE",
+                    discount_pct,
+                )
+
+                if discount_pct < MIN_DISCOUNT_PERCENT:
+                    logger.info(
+                        "AliExpress [dump] {} → DROP: desconto {}% < mínimo {}%",
+                        p.get("product_id", "?"), discount_pct, MIN_DISCOUNT_PERCENT,
+                    )
+                    continue
 
                 if not price or price <= 0:
                     continue
@@ -144,9 +166,6 @@ class AliExpressScraper(BaseScraper):
                     p.get("product_id", "?"), exc,
                 )
                 continue
-
-            if len(deals) >= MAX_DEALS_PER_RUN:
-                break
 
         logger.info("AliExpress: {} deals válidos após filtros.", len(deals))
         return deals

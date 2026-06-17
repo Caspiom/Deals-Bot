@@ -135,7 +135,7 @@ async def test_scrape_deduplicates_by_item_id(scraper):
 
 
 @pytest.mark.asyncio
-async def test_scrape_respects_max_deals(scraper):
+async def test_scraper_returns_all_qualified_deals(scraper):
     many = [
         {
             "url": f"https://shopee.com.br/produto-i.{i}.{i}00",
@@ -151,7 +151,7 @@ async def test_scrape_respects_max_deals(scraper):
     ]
     page = _make_page_mock(many)
     deals = await scraper._scrape(page)
-    assert len(deals) <= MAX_DEALS_PER_RUN
+    assert len(deals) == MAX_DEALS_PER_RUN * 4
 
 
 @pytest.mark.asyncio

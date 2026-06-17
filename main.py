@@ -6,7 +6,7 @@ from loguru import logger
 
 import src.utils.logger  # noqa: F401 — aciona setup_logger()
 
-from src.config.settings import SCRAPE_INTERVAL_MINUTES, ENABLED_PUBLISHERS, SHOW_ESTIMATED_INSTALLMENTS
+from src.config.settings import SCRAPE_INTERVAL_MINUTES, ENABLED_PUBLISHERS, SHOW_ESTIMATED_INSTALLMENTS, MAX_DEALS_PER_RUN
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
 from src.scrapers.mercadolivre_scraper import MercadoLivreScraper
@@ -14,6 +14,9 @@ from src.scrapers.kabum_scraper import KabumScraper
 from src.scrapers.aliexpress_scraper import AliExpressScraper
 from src.scrapers.amazon_scraper import AmazonScraper
 from src.scrapers.magalu_scraper import MagaluScraper
+# ShopeeScraper desativada — detecta Playwright via fingerprint e redireciona para
+# /verify/traffic/error. Reativar após configurar proxy residencial BR (ver docs/proxy_setup.md).
+# from src.scrapers.shopee_scraper import ShopeeScraper
 from src.services.affiliate import convert, is_commissionable
 from src.services.copywriter import generate as generate_tagline
 from src.services.installment_calculator import estimate as estimate_installments
@@ -81,7 +84,15 @@ async def run_cycle(
         len(all_deals), blocked, len(new_deals), len(hot_reposts), len(publishers),
     )
 
+    posts_sent = 0
     for deal in to_publish:
+        if posts_sent >= MAX_DEALS_PER_RUN:
+            logger.info(
+                "Limite de {} postagens/ciclo atingido — {} deal(s) inédito(s) guardados para o próximo ciclo.",
+                MAX_DEALS_PER_RUN, len(to_publish) - posts_sent,
+            )
+            break
+
         deal.affiliate_url = convert(deal.url)
         deal.tagline = generate_tagline(deal)
         deal.is_price_low = dedup.is_lowest_price(deal)
@@ -102,6 +113,8 @@ async def run_cycle(
                 deal.title[:60],
             )
         dedup.mark_seen(deal)
+        if published_any:
+            posts_sent += 1
 
     logger.info("<<< Ciclo concluído.")
 
