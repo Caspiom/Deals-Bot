@@ -13,7 +13,7 @@ from src.utils.price_parser import parse_brl as _parse_brl
 #  2. Buscas por categoria com sortBy=sales (mais vendidos = produtos com oferta real)
 #     Evitamos sortBy=price&order=asc pois retorna os itens mais baratos, não os mais descontados.
 _SEARCH_URLS = [
-    "https://shopee.com.br/m/shopee-deals",
+    "https://shopee.com.br/flash_sale",
     "https://shopee.com.br/search?keyword=smartphone&sortBy=sales&order=desc",
     "https://shopee.com.br/search?keyword=notebook&sortBy=sales&order=desc",
     "https://shopee.com.br/search?keyword=televisao&sortBy=sales&order=desc",
@@ -26,7 +26,12 @@ _SEARCH_URLS = [
 _PRODUCT_PATTERN = r"-i\.(\d+)\.(\d+)$"
 
 # Extrai produtos localizando links pelo padrão -i.{shopid}.{itemid}.
-# Shopee usa class names ofuscados — ancoramos nos links cujo formato é estável.
+# Shopee usa class names ofuscados — ancoramos nos links (estáveis) e no aria-label.
+#
+# DOM do flash_sale (confirmado via browser real):
+#   - Imagem: CSS background-image em div[style*="susercontent"], NÃO <img src>
+#   - Preço: <span>R$</span><strong>48,99</strong> em divs irmãos — nenhuma folha tem "R$48,99" completo
+#   - aria-label na <a>: "...menos 23% preço atual R$48,99..." — âncora estável para preço e desconto
 _EXTRACT_JS = """() => {
     const pattern = /-i\\.(\\d+)\\.(\\d+)$/;
     const seen = new Set();
@@ -40,37 +45,48 @@ _EXTRACT_JS = """() => {
             seen.add(link.href);
 
             const container = link.closest('li') || link.parentElement?.parentElement || link.parentElement;
+            const scope = container || link;
 
-            // Título: primeiro texto folha dentro do link com mais de 8 chars que não é preço
+            // Imagem: flash_sale usa CSS background-image em div, não <img src>
+            const bgDivs = Array.from(scope.querySelectorAll('[style*="background-image"]'));
+            const imgDiv = bgDivs.find(el => (el.getAttribute('style') || '').includes('susercontent'));
+            const bgUrl  = imgDiv?.getAttribute('style')?.match(/url\\(["']?([^"')]+)["']?\\)/)?.[1] ?? null;
+            const image  = bgUrl ? bgUrl.replace(/_tn$/, '') : null;
+
+            // Título: folha de texto com conteúdo significativo (não preço, não badge %)
             const title = Array.from(link.querySelectorAll('*'))
                 .filter(el => !el.querySelector('*'))
                 .map(el => el.innerText?.trim())
-                .find(t => t && t.length > 8 && !t.includes('R$') && !/^\\d+%$/.test(t)) ?? null;
+                .find(t => t && t.length > 8 && !t.includes('R$') && !/^-?\\d+%$/.test(t)) ?? null;
 
-            // Preço atual: primeiro elemento com R$ fora de <s>/<del>
-            const currentPriceEl = Array.from((container || link).querySelectorAll('*'))
-                .find(el => !el.querySelector('*') && el.innerText?.includes('R$')
-                         && !el.closest('s') && !el.closest('del'));
+            // Caixas de preço: div com exatamente 2 filhos (label "R$" + número decimal)
+            // Estrutura: <div><span>R$</span><strong>48,99</strong></div>
+            // Ordem no DOM: [0]=preço original (riscado), [last]=preço atual com desconto
+            const priceBoxes = Array.from(scope.querySelectorAll('div'))
+                .filter(el => {
+                    const ch = Array.from(el.children);
+                    return ch.length === 2 &&
+                           ch.some(c => /^R\\$$/.test(c.innerText?.trim() || '')) &&
+                           ch.some(c => /^[\\d.,]+$/.test(c.innerText?.trim() || ''));
+                });
 
-            // Preço antigo: dentro de <s> ou <del>
-            const oldPriceEl = Array.from((container || link).querySelectorAll('s *, del *'))
-                .find(el => !el.querySelector('*') && el.innerText?.includes('R$'));
+            const oldPriceText     = priceBoxes.length > 1 ? priceBoxes[0].innerText?.trim() : null;
+            const currentPriceText = priceBoxes.length > 0 ? priceBoxes[priceBoxes.length - 1].innerText?.trim() : null;
 
-            // Desconto: badge com "X%" ou "-X%"
-            const discountEl = Array.from((container || link).querySelectorAll('*'))
-                .find(el => !el.querySelector('*') && /^-?\\d+%$/.test(el.innerText?.trim() ?? ''));
-
-            const imgEl = (container || link).querySelector('img[src*="shopee"]');
+            // aria-label da <a> inclui preço atual e desconto — mais estável que class names
+            const aria = link.getAttribute('aria-label') || '';
+            const priceFromAria = aria.match(/preço atual R\\$\\s*([\\d.,]+)/i)?.[1] ?? null;
+            const discFromAria  = aria.match(/menos\\s+(\\d+)%/i)?.[1] ?? null;
 
             results.push({
-                url:      link.href,
-                title:    title,
-                price:    currentPriceEl?.innerText?.trim() ?? null,
-                old_price: oldPriceEl?.innerText?.trim() ?? null,
-                discount: discountEl?.innerText?.trim() ?? null,
-                image:    imgEl?.src ?? null,
-                item_id:  m[2],
-                shop_id:  m[1],
+                url:       link.href,
+                title:     title,
+                price:     priceFromAria ? ('R$ ' + priceFromAria) : currentPriceText,
+                old_price: oldPriceText,
+                discount:  discFromAria ? (discFromAria + '%') : null,
+                image:     image,
+                item_id:   m[2],
+                shop_id:   m[1],
             });
         } catch (_) {}
     }

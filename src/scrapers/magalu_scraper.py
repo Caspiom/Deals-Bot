@@ -7,7 +7,7 @@ from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
 from src.services.installment_calculator import parse_installment_string
 from src.utils.price_parser import parse_brl as _parse_brl
 
-_OFFERS_URL = "https://www.magazineluiza.com.br/ofertas/"
+_OFFERS_URL = "https://www.magazineluiza.com.br/selecao/ofertasdodia/"
 
 # Estratégia: ancora em links de produto (/p/{sku}/) que são estáveis entre redesigns.
 # Extrai dados subindo ao container pai — resistente a ofuscação de classes.
@@ -23,18 +23,21 @@ _EXTRACT_JS = """() => {
         .map(link => {
             const card = link.closest('li') || link.closest('article') || link.parentElement;
 
-            const titleEl   = card?.querySelector('h2, h3, [data-testid*="title"]');
-            const priceEl   = card?.querySelector(
-                '[data-testid="price-value"], [class*="price-value"], [class*="priceValue"]'
-            );
-            const oldEl     = card?.querySelector('s, del');
-            const discEl    = card?.querySelector(
-                '[data-testid*="discount"], [class*="discount"], [class*="Discount"]'
-            );
-            const installEl = card?.querySelector(
-                '[data-testid*="installment"], [class*="installment"]'
-            );
-            const imgEl     = card?.querySelector('img');
+            const titleEl   = card?.querySelector('[data-testid="product-title"], h2, h3');
+            const priceEl   = card?.querySelector('[data-testid="price-value"]');
+            const oldEl     = card?.querySelector('[data-testid="price-original"]');
+            const installEl = card?.querySelector('[data-testid="installment"]');
+
+            // Desconto como "10% de desconto no pix" — sem data-testid, busca por texto
+            const discEl = Array.from((card || link).querySelectorAll('*'))
+                .find(el => !el.querySelector('*') && /\\d+%\\s*de\\s*desconto/i.test(el.innerText || ''));
+
+            // Imagem principal — exclui os thumbnails de variantes de cor (50x50)
+            const imgEl = card?.querySelector('img[data-testid="image"][loading="lazy"]');
+
+            // Sobe a resolução do CDN: substitui "280x210" pelo maior tamanho disponível
+            let imgSrc = imgEl?.src || imgEl?.dataset?.src || null;
+            if (imgSrc) imgSrc = imgSrc.replace(/\\/\\d+x\\d+\\//, '/800x600/');
 
             return {
                 url:         link.href,
@@ -43,7 +46,7 @@ _EXTRACT_JS = """() => {
                 old_price:   oldEl?.innerText?.trim() ?? null,
                 discount:    discEl?.innerText?.trim() ?? null,
                 installment: installEl?.innerText?.trim() ?? null,
-                image:       imgEl?.src || imgEl?.dataset?.src || null,
+                image:       imgSrc,
             };
         }).filter(i => i.url && i.title && i.price);
 }"""

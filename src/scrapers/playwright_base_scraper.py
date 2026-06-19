@@ -3,6 +3,7 @@ import random
 
 from loguru import logger
 from playwright.async_api import async_playwright, Page
+from playwright_stealth import Stealth
 
 from src.config.settings import PLAYWRIGHT_MAX_BROWSERS, PROXY_URL
 from src.models import Deal
@@ -11,16 +12,13 @@ from src.scrapers.base_scraper import BaseScraper
 # ── User-Agent rotation ───────────────────────────────────────────────────────
 # Lista própria de desktop UAs recentes — fake-useragent 2.x retorna mobile UAs
 # quando requisitado sem filtro confiável de plataforma.
+# Restrito a Chrome/Windows para maximizar consistência com sec-ch-ua injetado pelo stealth.
 
 _DESKTOP_UAS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.1; rv:132.0) Gecko/20100101 Firefox/132.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
 ]
 
 
@@ -28,14 +26,14 @@ def _random_ua() -> str:
     return random.choice(_DESKTOP_UAS)
 
 
-# ── Anti-detecção ─────────────────────────────────────────────────────────────
-
-_STEALTH_SCRIPT = """
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    Object.defineProperty(navigator, 'plugins',   { get: () => [1, 2, 3, 4, 5] });
-    Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US'] });
-    window.chrome = { runtime: {} };
-"""
+# ── Stealth singleton ─────────────────────────────────────────────────────────
+# Configurado para simular Chrome/Windows com locale BR — cobre webdriver, plugins,
+# languages, chrome.runtime, WebGL, sec-ch-ua e demais fingerprints detectados por
+# Cloudflare/Akamai/PerimeterX.
+_STEALTH = Stealth(
+    navigator_languages_override=("pt-BR", "pt"),
+    navigator_platform_override="Win32",
+)
 
 # ── Semáforo global ───────────────────────────────────────────────────────────
 # Criado lazy para garantir que existe um event loop no momento da primeira aquisição.
@@ -72,8 +70,9 @@ class PlaywrightBaseScraper(BaseScraper):
 
                 browser = await pw.chromium.launch(**launch_kwargs)
                 try:
+                    ua = _random_ua()
                     ctx = await browser.new_context(
-                        user_agent=_random_ua(),
+                        user_agent=ua,
                         viewport={"width": 1366, "height": 768},
                         locale="pt-BR",
                         timezone_id="America/Sao_Paulo",
@@ -81,9 +80,9 @@ class PlaywrightBaseScraper(BaseScraper):
                             "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
                         },
                     )
-                    await ctx.add_init_script(_STEALTH_SCRIPT)
                     page = await ctx.new_page()
-                    logger.debug("{}: browser iniciado (UA: {}...)", self.name, _random_ua()[:40])
+                    await _STEALTH.apply_stealth_async(page)
+                    logger.debug("{}: browser iniciado (UA: {}...)", self.name, ua[:40])
                     return await self._scrape(page)
                 finally:
                     await browser.close()

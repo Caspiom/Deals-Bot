@@ -163,6 +163,8 @@ class AmazonScraper(PlaywrightBaseScraper):
                     continue
 
                 image = item.get("image") or ""
+                if image.startswith("http"):
+                    image = re.sub(r'\._[A-Z][^.]*(?=\.\w+$)', '', image)
 
                 deals.append(Deal(
                     title=item["title"],

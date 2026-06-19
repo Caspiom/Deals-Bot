@@ -1,103 +1,179 @@
-import httpx
+import re
+from playwright.async_api import Page
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, PROXY_URL
+from src.config.settings import MIN_DISCOUNT_PERCENT
 from src.models import Deal
-from src.scrapers.base_scraper import BaseScraper
+from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
 from src.services.installment_calculator import parse_installment_string
-from src.utils.retry import scraper_retry
+from src.utils.price_parser import parse_brl as _parse_brl
 
-_API_URL = "https://servicespub.prod.api.aws.grupokabum.com.br/catalog/v2/products"
-_PRODUCT_BASE = "https://www.kabum.com.br/produto"
-_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Origin": "https://www.kabum.com.br",
-    "Referer": "https://www.kabum.com.br/",
-    "Accept": "application/json",
-}
+# A API REST do KaBuM ignora sort/filter sem autenticação interna.
+# A página Super Ofertas carrega os produtos via CSR — Playwright resolve isso.
+_OFFERS_URL = "https://www.kabum.com.br/produtos/super-ofertas"
+_PRODUCT_BASE = "https://www.kabum.com.br"
+
+# Âncora em links de produto /produto/{numeric_id}/ — padrão estável entre redesigns.
+# Extrai dados subindo ao container pai (article ou li).
+_EXTRACT_JS = """() => {
+    const productPattern = /\\/produto\\/(\\d+)\\//;
+    const seen = new Set();
+
+    const links = Array.from(document.querySelectorAll('a[href*="/produto/"]'))
+        .filter(a => productPattern.test(a.pathname));
+
+    return links
+        .filter(a => {
+            const m = a.pathname.match(productPattern);
+            if (!m || seen.has(m[1])) return false;
+            seen.add(m[1]);
+            return true;
+        })
+        .map(link => {
+            const m = link.pathname.match(productPattern);
+            // KaBuM usa o próprio <a> como card — scope = link evita capturar cards vizinhos
+            const scope = link;
+
+            // Título: texto folha com conteúdo significativo (não preço, não ícone)
+            // length > 10 elimina ícones de 1 char (Material Icons, emojis)
+            const title = Array.from(scope.querySelectorAll('*'))
+                .filter(el => !el.querySelector('*'))
+                .map(el => el.innerText?.trim())
+                .find(t => t && t.length > 10 && !t.includes('R$') &&
+                           !/^(Desconto|Restam|Frete|No\\s|MEGA|Avalia|Adicionar)/i.test(t)) ?? null;
+
+            // Preço antigo: elemento FOLHA cuja innerText COMPLETA é "R$ X.XXX,XX"
+            // (KaBuM mostra o preço cheio sem estilo especial, riscado via CSS)
+            const completePrices = Array.from(scope.querySelectorAll('*'))
+                .filter(el => !el.querySelector('*'))
+                .map(el => {
+                    const t = el.innerText?.trim() || '';
+                    const mo = t.match(/^R\\$[\\s\\u00a0]*(\\d[\\d.]*,\\d{2})$/);
+                    return mo ? parseFloat(mo[1].replace(/\\./g,'').replace(',','.')) : null;
+                })
+                .filter(v => v && v > 0);
+
+            // Preço atual: estrutura DIVIDIDA "R$" + "2.299,99" em elementos irmãos
+            // KaBuM estiliza "R$" em span separado do valor numérico
+            const splitPrices = Array.from(scope.querySelectorAll('*'))
+                .filter(el => {
+                    const ch = Array.from(el.children);
+                    return ch.some(c => c.innerText?.trim() === 'R$') &&
+                           ch.some(c => /^\\d[\\d.,]*$/.test(c.innerText?.trim() || ''));
+                })
+                .map(el => {
+                    const numCh = Array.from(el.children)
+                        .find(c => /^\\d[\\d.,]*$/.test(c.innerText?.trim() || ''));
+                    const t = numCh?.innerText?.trim() || '';
+                    return t ? parseFloat(t.replace(/\\./g,'').replace(',','.')) : null;
+                })
+                .filter(v => v && v > 0);
+
+            // currentPrice = menor valor split (preço com desconto, em destaque)
+            // oldPrice     = maior valor complete (preço original, riscado via CSS)
+            const currentPrice = splitPrices.length ? Math.min(...splitPrices) :
+                                 completePrices.length ? Math.min(...completePrices) : null;
+            const oldPrice = completePrices.length && splitPrices.length
+                ? Math.max(...completePrices)
+                : completePrices.length > 1 ? Math.max(...completePrices) : null;
+
+            // Parcelas: "No PIX ou Nx de R$ Y"
+            const installEl = Array.from(scope.querySelectorAll('*'))
+                .find(el => !el.querySelector('*') && /\\dx\\s+de\\s+R\\$|sem\\s+juros/i.test(el.innerText ?? ''));
+
+            // Imagem: primeira <img> com src http
+            const imgEl = Array.from(scope.querySelectorAll('img[src]'))
+                .find(img => img.src?.startsWith('http'));
+
+            return {
+                id:          m ? m[1] : null,
+                url:         link.href,
+                title:       title,
+                price:       currentPrice !== null ? String(currentPrice) : null,
+                old_price:   oldPrice !== null ? String(oldPrice) : null,
+                discount:    null,
+                image:       imgEl?.src ?? null,
+                installment: installEl?.innerText?.trim() ?? null,
+            };
+        }).filter(i => i.id && i.title && i.price);
+}"""
 
 
-class KabumScraper(BaseScraper):
+def _parse_discount_pct(text: str | None) -> int | None:
+    if not text:
+        return None
+    m = re.search(r"(\d+)\s*%", text)
+    return int(m.group(1)) if m else None
+
+
+class KabumScraper(PlaywrightBaseScraper):
     name = "kabum"
 
-    @scraper_retry
-    async def fetch(self) -> list[Deal]:
-        async with httpx.AsyncClient(headers=_HEADERS, timeout=15, proxy=PROXY_URL or None) as client:
-            resp = await client.get(
-                _API_URL,
-                params={
-                    "page_number": 1,
-                    "page_size": "100",
-                    "sort": "most_discount_percentage",
-                    "is_offer": "true",
-                },
-            )
-            resp.raise_for_status()
-            items = resp.json().get("data", [])
+    async def _scrape(self, page: Page) -> list[Deal]:
+        await page.goto(_OFFERS_URL, wait_until="domcontentloaded", timeout=30000)
 
-        logger.info("KaBuM: {} produtos recebidos.", len(items))
+        try:
+            await page.wait_for_load_state("networkidle", timeout=10000)
+        except Exception:
+            pass
 
-        seen_ids: set[int] = set()
+        try:
+            await page.wait_for_selector('a[href*="/produto/"]', timeout=20000)
+        except Exception:
+            logger.warning("KaBuM: nenhum link de produto encontrado — DOM vazio ou bloqueio.")
+            return []
+
+        for i in range(6):
+            await page.evaluate("window.scrollBy(0, window.innerHeight)")
+            await page.wait_for_timeout(600 + (i % 3) * 200)
+
+        raw: list[dict] = await page.evaluate(_EXTRACT_JS)
+        logger.info("KaBuM: {} cards extraídos do DOM.", len(raw))
+
+        seen_ids: set[str] = set()
         deals: list[Deal] = []
 
-        for item in items:
+        for item in raw:
             try:
-                attr = item.get("attributes", {})
-                product_id = int(item.get("id") or 0)
-                if not product_id or product_id in seen_ids:
+                pid = item.get("id", "")
+                if not pid or pid in seen_ids:
                     continue
-                seen_ids.add(product_id)
+                seen_ids.add(pid)
 
-                price          = float(attr.get("price_with_discount") or 0)
-                original_price = float(attr.get("price") or 0)
-                discount_pct   = int(attr.get("discount_percentage") or 0)
+                price        = _parse_brl(item.get("price"))
+                old_price    = _parse_brl(item.get("old_price"))
+                discount_pct = _parse_discount_pct(item.get("discount"))
 
-                if price <= 0:
-                    continue
-
-                if discount_pct == 0 and original_price > price:
-                    discount_pct = int((1 - price / original_price) * 100)
+                if discount_pct is None and old_price and old_price > (price or 0):
+                    discount_pct = int((1 - (price or 0) / old_price) * 100)
 
                 logger.info(
-                    "KaBuM [dump] {} | '{}' | preço: {:.2f} | old: {:.2f} | desc: {}%",
-                    product_id,
-                    (attr.get("title") or "")[:45],
-                    price, original_price, discount_pct,
+                    "KaBuM [dump] {} | '{}' | preço: '{}' → {} | old: '{}' → {} | desc: '{}' → {}%",
+                    pid,
+                    (item.get("title") or "")[:45],
+                    item.get("price"),     f"{price:.2f}"     if price     is not None else "NONE",
+                    item.get("old_price"), f"{old_price:.2f}" if old_price is not None else "NONE",
+                    item.get("discount"),  discount_pct if discount_pct is not None else "NONE",
                 )
 
-                if discount_pct < MIN_DISCOUNT_PERCENT:
-                    logger.info("KaBuM [dump] {} → DROP: desconto {}% < mínimo {}%", product_id, discount_pct, MIN_DISCOUNT_PERCENT)
+                if price is None or price <= 0:
+                    logger.info("KaBuM [dump] {} → DROP: preço inválido", pid)
                     continue
 
-                if not attr.get("available", True):
+                if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                    logger.info("KaBuM [dump] {} → DROP: desconto {}% < mínimo {}%", pid, discount_pct, MIN_DISCOUNT_PERCENT)
                     continue
 
-                slug = attr.get("product_link", "")
-                url = f"{_PRODUCT_BASE}/{product_id}/{slug}"
+                parsed = parse_installment_string(item.get("installment") or "")
+                n_inst, v_inst = parsed if parsed else (None, None)
 
-                image_url = None
-                try:
-                    photos = attr.get("photos", {})
-                    for size in ("m", "g", "p"):
-                        imgs = photos.get(size)
-                        if imgs and isinstance(imgs, list) and imgs[0]:
-                            image_url = imgs[0]
-                            break
-                except Exception:
-                    pass
-
-                n_inst, v_inst = None, None
-                try:
-                    installment_raw = attr.get("max_installment") or ""
-                    parsed = parse_installment_string(installment_raw) if installment_raw else None
-                    n_inst, v_inst = parsed if parsed else (None, None)
-                except Exception:
-                    pass
+                image = item.get("image") or ""
+                image_url = image if image.startswith("http") else None
 
                 deals.append(Deal(
-                    title=attr.get("title", "").strip(),
-                    url=url,
+                    title=item["title"],
+                    url=item["url"],
                     price=price,
-                    old_price=original_price if original_price > price else None,
+                    old_price=old_price if old_price and old_price > price else None,
                     discount_pct=discount_pct,
                     image_url=image_url,
                     source=self.name,

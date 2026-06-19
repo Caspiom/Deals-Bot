@@ -14,9 +14,7 @@ from src.scrapers.kabum_scraper import KabumScraper
 from src.scrapers.aliexpress_scraper import AliExpressScraper
 from src.scrapers.amazon_scraper import AmazonScraper
 from src.scrapers.magalu_scraper import MagaluScraper
-# ShopeeScraper desativada — detecta Playwright via fingerprint e redireciona para
-# /verify/traffic/error. Reativar após configurar proxy residencial BR (ver docs/proxy_setup.md).
-# from src.scrapers.shopee_scraper import ShopeeScraper
+from src.scrapers.shopee_scraper import ShopeeScraper
 from src.services.affiliate import convert, is_commissionable
 from src.services.copywriter import generate as generate_tagline
 from src.services.installment_calculator import estimate as estimate_installments
@@ -129,6 +127,7 @@ async def main() -> None:
         MagaluScraper(),
         AliExpressScraper(),
         AmazonScraper(),
+        ShopeeScraper(),
     ]
     dedup = DedupFilter()
     publishers = _build_publishers()
