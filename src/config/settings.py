@@ -62,6 +62,11 @@ HIGH_DISCOUNT_PCT: int     = int(os.getenv("HIGH_DISCOUNT_PCT", "50"))
 REPOST_HIGH_HOURS: int     = int(os.getenv("REPOST_HIGH_HOURS", "24"))
 REPOST_LOW_HOURS: int      = int(os.getenv("REPOST_LOW_HOURS", "48"))
 
+# ── Rastreamento de cliques ───────────────────────────────────────────────────
+# URL base do servidor de tracking (ex: https://achadinhosbr.com/r)
+# Deixar vazio para desativar tracking (publishers usarão affiliate_url diretamente)
+TRACKER_BASE_URL: str = os.getenv("TRACKER_BASE_URL", "").rstrip("/")
+
 # ── Banco de dados ───────────────────────────────────────────────────────────
 DATABASE_PATH: Path  = BASE_DIR / os.getenv("DATABASE_PATH", "data/deals.db")
 DEDUP_TTL_DAYS: int  = int(os.getenv("DEDUP_TTL_DAYS", "7"))

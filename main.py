@@ -20,6 +20,7 @@ from src.services.affiliate import convert, is_commissionable
 from src.services.copywriter import generate as generate_tagline
 from src.services.installment_calculator import estimate as estimate_installments
 from src.services.dedup_filter import DedupFilter
+from src.services.tracker import ClickTracker
 from src.publishers.base_publisher import BasePublisher
 from src.publishers.telegram_publisher import TelegramPublisher
 
@@ -53,6 +54,7 @@ async def run_cycle(
     scrapers: list[BaseScraper],
     dedup: DedupFilter,
     publishers: list[BasePublisher],
+    tracker: ClickTracker | None = None,
 ) -> None:
     logger.info(">>> Iniciando ciclo | scrapers={}", [s.name for s in scrapers])
 
@@ -95,6 +97,7 @@ async def run_cycle(
             break
 
         deal.affiliate_url = convert(deal.url)
+        deal.tracked_url = tracker.register(deal.affiliate_url) if tracker else ""
         deal.tagline = generate_tagline(deal)
         deal.is_price_low = dedup.is_lowest_price(deal)
         if deal.installments is None and SHOW_ESTIMATED_INSTALLMENTS:
@@ -134,6 +137,7 @@ async def main() -> None:
         AmericanasScraper(),
     ]
     dedup = DedupFilter()
+    tracker = ClickTracker()
     publishers = _build_publishers()
 
     scheduler = AsyncIOScheduler()
@@ -141,7 +145,7 @@ async def main() -> None:
         run_cycle,
         trigger="interval",
         minutes=SCRAPE_INTERVAL_MINUTES,
-        args=[scrapers, dedup, publishers],
+        args=[scrapers, dedup, publishers, tracker],
         next_run_time=datetime.now(),
         max_instances=1,
         misfire_grace_time=60,
@@ -160,6 +164,7 @@ async def main() -> None:
     finally:
         scheduler.shutdown(wait=False)
         dedup.close()
+        tracker.close()
         for p in publishers:
             if hasattr(p, "close"):
                 await p.close()

@@ -17,6 +17,7 @@ class Deal:
     coupon_code: str | None = None
     coins_discount_value: float | None = None
     affiliate_url: str = ""
+    tracked_url: str = ""
     is_price_low: bool = False
     tax_note: str | None = None
 

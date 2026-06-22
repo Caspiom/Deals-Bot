@@ -151,6 +151,7 @@ class Deal:
     coupon_code: str | None          # Cupom de desconto quando disponível
     coins_discount_value: float | None  # Preço com moedas/cashback (MercadoLivre)
     affiliate_url: str               # Preenchida pelo AffiliateService antes de publicar (default "")
+    tracked_url: str                 # URL de rastreamento achadinhosbr.com/r/{deal_id} (default ""); vazio se TRACKER_BASE_URL não configurado
     is_price_low: bool               # True se for o menor preço nos últimos 30 dias
     tax_note: str | None             # Nota de imposto de importação (ex: AliExpress com impostos BR)
 ```
@@ -506,10 +507,43 @@ docker compose up -d
 
 ---
 
-### 🔲 Fase 15 — Módulo de API REST (Este Repositório)
-- [ ] Desenvolver uma API RESTful leve (usando um framework assíncrono como FastAPI ou Sanic) dentro deste repositório (estruturada em `src/api/`).
-- [ ] Expor os dados minerados e deduplicados do banco SQLite para consumo externo, garantindo endpoints para Deals ativos com paginação, busca por categorias, tags e filtros de desconto real.
-- [ ] Isolar as rotas da API para servir puramente como o provider de payloads JSON que os clientes externos vão consumir.
+### ✅ Fase 15.1 — Click Tracking via achadinhosbr.com (CONCLUÍDA — 2026-06-22)
+
+**Motivação:** sem dados de cliques, impossível saber quais fontes (Telegram vs Discord) e quais lojas (KaBuM vs Amazon) convertem mais. Decisão de especializar o Discord em eletrônicos precisa de dados reais.
+
+**Implementação:**
+- [x] `src/services/tracker.py` — `ClickTracker`: tabelas `tracked_links` e `clicks` no mesmo `deals.db`; `register(affiliate_url)` gera `deal_id = sha256[:12]` e retorna `TRACKER_BASE_URL/{deal_id}`; `log_click(deal_id, source)` registra clique; `get_stats()` agrega por deal e source
+- [x] `src/api/app.py` — FastAPI com dois endpoints: `GET /r/{deal_id}?s=tg` → 302 ao link afiliado + loga clique; `GET /stats` → JSON com cliques por deal e canal
+- [x] `src/api/__init__.py` — pacote criado
+- [x] `src/models.py` — campo `tracked_url: str = ""` adicionado ao `Deal`
+- [x] `src/config/settings.py` — `TRACKER_BASE_URL` (padrão vazio = tracking desativado)
+- [x] `main.py` — `ClickTracker` inicializado junto ao `DedupFilter`; `deal.tracked_url = tracker.register(deal.affiliate_url)` antes de publicar; `tracker.close()` no shutdown
+- [x] `TelegramPublisher` — usa `tracked_url + "?s=tg"` quando disponível
+- [x] `DiscordPublisher` — usa `tracked_url + "?s=dc"` quando disponível
+- [x] `fastapi>=0.138.0` e `uvicorn[standard]>=0.49.0` adicionados via `uv add`
+- [x] 189/189 testes passando
+
+**Como rodar o servidor de tracking:**
+```bash
+TRACKER_BASE_URL=https://achadinhosbr.com/r uvicorn src.api.app:app --host 0.0.0.0 --port 8000
+```
+O bot e a API compartilham o mesmo `deals.db` — rodam no mesmo servidor.
+
+**Configuração no `.env`:**
+```
+TRACKER_BASE_URL=https://achadinhosbr.com/r
+```
+Deixar vazio desativa o tracking; publishers voltam a usar `affiliate_url` diretamente.
+
+**Dados capturados por clique:** `deal_id`, `source` (tg/dc), `clicked_at` (UTC ISO).
+
+---
+
+### 🔲 Fase 15.2 — API REST de Deals (Este Repositório)
+- [ ] Endpoint `GET /deals` — lista deals ativos com paginação, filtro por loja/categoria/desconto mínimo
+- [ ] Endpoint `GET /deals/{deal_id}` — deal individual com histórico de preço
+- [ ] Autenticação simples (API key no header) para proteger endpoints de stats/admin
+- [ ] Dashboard de analytics: cliques por fonte, CTR por loja, deals mais clicados
 
 **Direcionamento estratégico:** Este repositório funciona como Engine de Mineração e API provedora de dados. O Frontend Web e o Aplicativo Mobile serão desenvolvidos em repositórios separados e independentes que consomem esta API.
 

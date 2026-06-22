@@ -139,7 +139,7 @@ class DiscordPublisher(BasePublisher):
         await self._client.close()
 
     def _build_embed(self, deal: Deal) -> discord.Embed:
-        url = deal.affiliate_url or deal.url
+        url = (deal.tracked_url + "?s=dc") if deal.tracked_url else (deal.affiliate_url or deal.url)
         embed = discord.Embed(
             title=f"🔥 {deal.title}",
             url=url,

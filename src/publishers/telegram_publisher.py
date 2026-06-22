@@ -68,7 +68,7 @@ class TelegramPublisher(BasePublisher):
     @publisher_retry
     async def publish(self, deal: Deal) -> None:
         caption = self._format_caption(deal)
-        url = deal.affiliate_url or deal.url
+        url = (deal.tracked_url + "?s=tg") if deal.tracked_url else (deal.affiliate_url or deal.url)
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("🛒 Comprar agora", url=url)
         ]])
