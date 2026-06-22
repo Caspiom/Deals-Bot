@@ -107,7 +107,11 @@ class MercadoLivreScraper(PlaywrightBaseScraper):
                     item.get("discount"), discount_pct if discount_pct is not None else "NONE",
                 )
 
-                if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                if discount_pct is None:
+                    logger.info("ML [dump] {} → DROP: desconto não determinado", pid)
+                    continue
+
+                if discount_pct < MIN_DISCOUNT_PERCENT:
                     logger.info("ML [dump] {} → DROP: desconto {}% < mínimo {}%", pid, discount_pct, MIN_DISCOUNT_PERCENT)
                     continue
 

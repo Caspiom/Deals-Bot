@@ -74,9 +74,12 @@ class AmericanasScraper(BaseScraper):
                     old_price = None
                     discount_pct = None
 
-                if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                if discount_pct is None:
+                    logger.info("Americanas [dump] {} → DROP: desconto não determinado", pid)
                     continue
-                if discount_pct is not None and discount_pct > AMERICANAS_MAX_DISCOUNT_PCT:
+                if discount_pct < MIN_DISCOUNT_PERCENT:
+                    continue
+                if discount_pct > AMERICANAS_MAX_DISCOUNT_PCT:
                     logger.info(
                         "Americanas [dump] {} → DROP: desconto {}% > teto {}% (ListPrice inflado)",
                         pid, discount_pct, AMERICANAS_MAX_DISCOUNT_PCT,

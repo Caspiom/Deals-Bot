@@ -88,7 +88,7 @@ _EXTRACT_JS = """() => {
                 item_id:   m[2],
                 shop_id:   m[1],
             });
-        } catch (_) {}
+        } catch (e) { console.warn('[shopee-extract]', link?.href, e?.message || String(e)); }
     }
     return results.filter(i => i.title && i.price && i.item_id);
 }"""
@@ -165,7 +165,11 @@ class ShopeeScraper(PlaywrightBaseScraper):
                         logger.info("Shopee [dump] {} → DROP: preço inválido ('{}')", item_id, item.get("price"))
                         continue
 
-                    if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                    if discount_pct is None:
+                        logger.info("Shopee [dump] {} → DROP: desconto não determinado", item_id)
+                        continue
+
+                    if discount_pct < MIN_DISCOUNT_PERCENT:
                         logger.info("Shopee [dump] {} → DROP: desconto {}% < mínimo {}%", item_id, discount_pct, MIN_DISCOUNT_PERCENT)
                         continue
 

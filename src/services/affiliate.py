@@ -28,15 +28,16 @@ def is_commissionable(url: str) -> bool:
 
 def convert(url: str) -> str:
     """Converte URL de produto em link de afiliado. Pronto para receber integrações reais."""
-    if "amazon.com.br" in url:
+    netloc = urlparse(url).netloc.lower()
+    if "amazon.com.br" in netloc:
         return _amazon(url)
-    if "magazineluiza.com.br" in url or "magalu.com.br" in url:
+    if "magazineluiza.com.br" in netloc or "magalu.com.br" in netloc:
         return _magalu(url)
-    if "mercadolivre.com.br" in url or "mercadolibre.com.br" in url:
+    if "mercadolivre.com.br" in netloc or "mercadolibre.com.br" in netloc:
         return _mercadolivre(url)
-    if "shopee.com.br" in url:
+    if "shopee.com.br" in netloc:
         return _shopee(url)
-    if "americanas.com.br" in url:
+    if "americanas.com.br" in netloc:
         return _americanas(url)
     return _default(url)
 

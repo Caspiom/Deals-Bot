@@ -108,14 +108,14 @@ async def run_cycle(
                 published_any = True
             except Exception as exc:
                 logger.error("[{}] Falha ao publicar '{}': {}", publisher.name, deal.title[:40], exc)
-        if not published_any:
+        if published_any:
+            dedup.mark_seen(deal)
+            posts_sent += 1
+        else:
             logger.warning(
-                "Deal marcado como visto apesar de falha em todos os publishers: {}",
+                "Deal NÃO publicado (falha em todos os publishers) — será retentado no próximo ciclo: {}",
                 deal.title[:60],
             )
-        dedup.mark_seen(deal)
-        if published_any:
-            posts_sent += 1
 
     logger.info("<<< Ciclo concluído.")
 

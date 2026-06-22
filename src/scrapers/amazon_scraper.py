@@ -102,14 +102,6 @@ class AmazonScraper(PlaywrightBaseScraper):
         await page.evaluate("window.scrollTo(0, 0)")
         await page.wait_for_timeout(500)
 
-        # ── DEBUG TEMPORÁRIO ──────────────────────────────────────────────────
-        page_title = await page.title()
-        logger.info("Amazon [debug]: título='{}' (screenshot após scroll)", page_title)
-        await page.screenshot(path="data/debug_amazon.png", full_page=False)
-        dp_count = await page.evaluate("document.querySelectorAll('a[href*=\"/dp/\"]').length")
-        logger.info("Amazon [debug]: {} links /dp/ no DOM após scroll", dp_count)
-        # ─────────────────────────────────────────────────────────────────────
-
         raw: list[dict] = await page.evaluate(_EXTRACT_JS)
         logger.info("Amazon: {} cards brutos extraídos (antes de filtros).", len(raw))
 
@@ -155,7 +147,11 @@ class AmazonScraper(PlaywrightBaseScraper):
                     logger.info("Amazon [dump] {} → DROP: preço inválido ('{}')", asin, item.get("price"))
                     continue
 
-                if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                if discount_pct is None:
+                    logger.info("Amazon [dump] {} → DROP: desconto não determinado", asin)
+                    continue
+
+                if discount_pct < MIN_DISCOUNT_PERCENT:
                     logger.info(
                         "Amazon [dump] {} → DROP: desconto {}% < mínimo {}%",
                         asin, discount_pct, MIN_DISCOUNT_PERCENT,

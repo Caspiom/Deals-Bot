@@ -159,7 +159,11 @@ class KabumScraper(PlaywrightBaseScraper):
                     logger.info("KaBuM [dump] {} → DROP: preço inválido", pid)
                     continue
 
-                if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                if discount_pct is None:
+                    logger.info("KaBuM [dump] {} → DROP: desconto não determinado", pid)
+                    continue
+
+                if discount_pct < MIN_DISCOUNT_PERCENT:
                     logger.info("KaBuM [dump] {} → DROP: desconto {}% < mínimo {}%", pid, discount_pct, MIN_DISCOUNT_PERCENT)
                     continue
 

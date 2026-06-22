@@ -141,12 +141,11 @@ async def test_scraper_returns_all_qualified_deals(scraper):
 
 
 @pytest.mark.asyncio
-async def test_scrape_includes_deal_without_discount_text(scraper):
-    # card sem discount_pct deve ser incluído (confia na curadoria do ML Ofertas)
+async def test_scrape_drops_deal_without_discount_info(scraper):
+    # card sem badge de desconto nem old_price → desconto não determinado → deve ser dropado
     page = _make_page_mock([_MOCK_CARDS[3]])
     deals = await scraper._scrape(page)
-    assert len(deals) == 1
-    assert deals[0].discount_pct is None
+    assert len(deals) == 0
 
 
 @pytest.mark.asyncio

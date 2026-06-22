@@ -21,8 +21,8 @@ def parse_brl(text: str | None) -> float | None:
         cleaned = cleaned.replace(',', '.')
     elif '.' in cleaned:
         parts = cleaned.split('.')
-        if len(parts) == 2 and len(parts[1]) == 3 and parts[1].isdigit():
-            cleaned = parts[0] + parts[1]
+        if parts[0].isdigit() and all(len(p) == 3 and p.isdigit() for p in parts[1:]):
+            cleaned = ''.join(parts)
     try:
         return float(cleaned)
     except ValueError:

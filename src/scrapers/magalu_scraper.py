@@ -116,7 +116,11 @@ class MagaluScraper(PlaywrightBaseScraper):
                     item.get("discount"),  discount_pct if discount_pct is not None else "NONE",
                 )
 
-                if discount_pct is not None and discount_pct < MIN_DISCOUNT_PERCENT:
+                if discount_pct is None:
+                    logger.info("Magalu [dump] {} → DROP: desconto não determinado", sku)
+                    continue
+
+                if discount_pct < MIN_DISCOUNT_PERCENT:
                     logger.info("Magalu [dump] {} → DROP: desconto {}% < mínimo {}%", sku, discount_pct, MIN_DISCOUNT_PERCENT)
                     continue
 
