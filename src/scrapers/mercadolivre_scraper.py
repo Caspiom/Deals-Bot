@@ -19,7 +19,7 @@ _EXTRACT_JS = """() => {
         const titleEl  = card.querySelector('[class*="poly-component__title"]');
         const link     = card.querySelector('a[href*="mercadolivre"], a[href*="produto."]');
         const discEl   = card.querySelector('[class*="andes-money-amount__discount"]');
-        const imgEl    = card.querySelector('img[src*="mlstatic"]');
+        const imgEl    = card.querySelector('img[src*="mlstatic"], img[data-src*="mlstatic"]');
         const strikeEl = card.querySelector('s [class*="andes-money-amount__fraction"]');
         const fractions = card.querySelectorAll('[class*="andes-money-amount__fraction"]');
         let curFraction = null;
@@ -35,7 +35,11 @@ _EXTRACT_JS = """() => {
             current:     curFraction?.innerText?.trim() ?? null,
             original:    strikeEl?.innerText?.trim() ?? null,
             discount:    discEl?.innerText?.trim() ?? null,
-            image:       imgEl?.src ?? null,
+            image:       (() => {
+                const raw = imgEl?.getAttribute('data-src') || imgEl?.src || null;
+                // ponytail: upgrade ML CDN thumbnail to original — _2X_ = retina thumb, -F/-I = front/item thumbnail
+                return raw ? raw.replace(/_\\d+X_/, '_').replace(/-(F|I)\\.(webp|jpg|png)$/i, '-O.$2') : null;
+            })(),
             installment: installEl?.innerText?.trim() ?? null,
             coupon:      couponEl?.innerText?.trim() ?? null,
             coins:       coinsEl?.innerText?.trim() ?? null,

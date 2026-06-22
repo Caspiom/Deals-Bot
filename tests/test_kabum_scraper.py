@@ -1,60 +1,56 @@
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
-from src.scrapers.kabum_scraper import KabumScraper
-from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
+from unittest.mock import AsyncMock
+from src.scrapers.kabum_scraper import KabumScraper, _parse_discount_pct
+from src.config.settings import MIN_DISCOUNT_PERCENT
 
-_MOCK_PRODUCTS = [
+_MOCK_CARDS = [
     {
-        "id": 101,
-        "attributes": {
-            "title": "Placa de Vídeo RTX 4070 Super 12GB",
-            "price": 3000.00,
-            "price_with_discount": 1800.00,
-            "discount_percentage": 40,
-            "available": True,
-            "product_link": "placa-rtx-4070-super",
-            "photos": {"m": ["https://images.kabum.com.br/101/m.jpg"]},
-        },
+        "id": "101",
+        "url": "https://www.kabum.com.br/produto/101/placa-rtx-4070-super",
+        "title": "Placa de Vídeo RTX 4070 Super 12GB",
+        "price": "1800.0",
+        "old_price": "3000.0",
+        "discount": None,
+        "image": "https://images.kabum.com.br/101/m.jpg",
+        "installment": "10x de R$ 180,00 sem juros",
     },
     {
-        "id": 102,
-        "attributes": {
-            "title": "SSD NVMe 1TB Samsung 980 Pro",
-            "price": 600.00,
-            "price_with_discount": 420.00,
-            "discount_percentage": 30,
-            "available": True,
-            "product_link": "ssd-samsung-980-pro-1tb",
-            "photos": {"m": ["https://images.kabum.com.br/102/m.jpg"]},
-        },
+        "id": "102",
+        "url": "https://www.kabum.com.br/produto/102/ssd-samsung-980-pro",
+        "title": "SSD NVMe 1TB Samsung 980 Pro",
+        "price": "420.0",
+        "old_price": "600.0",
+        "discount": None,
+        "image": "https://images.kabum.com.br/102/m.jpg",
+        "installment": None,
     },
     {
-        "id": 103,
-        "attributes": {
-            "title": "Cabo HDMI 2.0 1.5m",
-            "price": 30.00,
-            "price_with_discount": 28.00,
-            "discount_percentage": 6,
-            "available": True,
-            "product_link": "cabo-hdmi",
-            "photos": {},
-        },
-    },
-    {
-        "id": 104,
-        "attributes": {
-            "title": "Monitor 4K 27 polegadas (sem estoque)",
-            "price": 2000.00,
-            "price_with_discount": 1200.00,
-            "discount_percentage": 40,
-            "available": False,
-            "product_link": "monitor-4k-27",
-            "photos": {},
-        },
+        "id": "103",
+        "url": "https://www.kabum.com.br/produto/103/cabo-hdmi",
+        "title": "Cabo HDMI 2.0 1.5m",
+        "price": "28.0",
+        "old_price": "30.0",
+        "discount": None,
+        "image": None,
+        "installment": None,
     },
 ]
 
-_MOCK_RESPONSE = {"data": _MOCK_PRODUCTS}
+
+def _make_page_mock(cards: list[dict]) -> AsyncMock:
+    page = AsyncMock()
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.wait_for_selector = AsyncMock()
+    page.wait_for_timeout = AsyncMock()
+
+    async def evaluate_side_effect(expr):
+        if "scrollBy" in expr:
+            return None
+        return cards
+
+    page.evaluate = AsyncMock(side_effect=evaluate_side_effect)
+    return page
 
 
 @pytest.fixture
@@ -63,46 +59,46 @@ def scraper():
 
 
 @pytest.fixture
-def mock_api():
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = _MOCK_RESPONSE
-    mock_resp.raise_for_status = MagicMock()
+def mock_page():
+    return _make_page_mock(_MOCK_CARDS)
 
-    with patch("src.scrapers.kabum_scraper.httpx.AsyncClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_cls.return_value = mock_client
-        yield
 
+# ── _parse_discount_pct ───────────────────────────────────────────────────────
+
+def test_parse_discount_negative_badge():
+    assert _parse_discount_pct("-40%") == 40
+
+def test_parse_discount_plain():
+    assert _parse_discount_pct("40 %") == 40
+
+def test_parse_discount_none():
+    assert _parse_discount_pct(None) is None
+
+def test_parse_discount_no_match():
+    assert _parse_discount_pct("sem desconto") is None
+
+
+# ── _scrape ───────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_fetch_returns_deals(scraper, mock_api):
-    deals = await scraper.fetch()
+async def test_scrape_returns_deals(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
     assert len(deals) > 0
 
 
 @pytest.mark.asyncio
-async def test_fetch_filters_low_discount(scraper, mock_api):
-    deals = await scraper.fetch()
+async def test_scrape_filters_low_discount(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
     for deal in deals:
         assert deal.discount_pct >= MIN_DISCOUNT_PERCENT
 
 
 @pytest.mark.asyncio
-async def test_fetch_skips_unavailable_products(scraper, mock_api):
-    deals = await scraper.fetch()
-    titles = [d.title for d in deals]
-    assert not any("sem estoque" in t for t in titles)
-
-
-@pytest.mark.asyncio
-async def test_fetch_maps_fields_correctly(scraper, mock_api):
-    deals = await scraper.fetch()
+async def test_scrape_maps_fields_correctly(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
     rtx = next(d for d in deals if "RTX" in d.title)
-    assert rtx.price == 1800.00
-    assert rtx.old_price == 3000.00
+    assert rtx.price == 1800.0
+    assert rtx.old_price == 3000.0
     assert rtx.discount_pct == 40
     assert rtx.source == "kabum"
     assert "kabum.com.br/produto/101" in rtx.url
@@ -110,65 +106,83 @@ async def test_fetch_maps_fields_correctly(scraper, mock_api):
 
 
 @pytest.mark.asyncio
-async def test_fetch_respects_max_deals(scraper, mock_api):
-    deals = await scraper.fetch()
-    assert len(deals) <= MAX_DEALS_PER_RUN
+async def test_scrape_with_installment(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
+    rtx = next(d for d in deals if "RTX" in d.title)
+    assert rtx.installments == 10
+    assert rtx.installment_value == 180.0
 
 
 @pytest.mark.asyncio
-async def test_fetch_deduplicates_across_categories(scraper, mock_api):
-    # 6 categorias retornam os mesmos IDs → dedup deve manter apenas 1 cópia de cada
-    deals = await scraper.fetch()
-    urls = [d.url for d in deals]
-    assert len(urls) == len(set(urls))
+async def test_scrape_deduplicates_by_id(scraper):
+    duplicated = _MOCK_CARDS[:1] + _MOCK_CARDS[:1]
+    deals = await scraper._scrape(_make_page_mock(duplicated))
+    assert len(deals) == 1
 
 
 @pytest.mark.asyncio
-async def test_fetch_calculates_pct_from_prices_when_api_returns_zero(scraper):
-    mock_product = {
-        "id": 201,
-        "attributes": {
-            "title": "Headset Logitech G435",
-            "price": 500.00,
-            "price_with_discount": 300.00,
-            "discount_percentage": 0,   # API retornou 0
-            "available": True,
-            "product_link": "headset-g435",
-            "photos": {},
-        },
-    }
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"data": [mock_product]}
-    mock_resp.raise_for_status = MagicMock()
-
-    with patch("src.scrapers.kabum_scraper.httpx.AsyncClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_cls.return_value = mock_client
-
-        deals = await scraper.fetch()
-
+async def test_scrape_calculates_pct_from_prices_when_discount_null(scraper):
+    cards = [{
+        "id": "201",
+        "url": "https://www.kabum.com.br/produto/201/headset-g435",
+        "title": "Headset Logitech G435",
+        "price": "300.0",
+        "old_price": "500.0",
+        "discount": None,
+        "image": None,
+        "installment": None,
+    }]
+    deals = await scraper._scrape(_make_page_mock(cards))
     assert len(deals) == 1
     assert deals[0].discount_pct == 40
 
 
 @pytest.mark.asyncio
-async def test_fetch_handles_http_error(scraper):
-    """Erro HTTP no endpoint único é propagado como lista vazia."""
-    err_resp = MagicMock()
-    err_resp.raise_for_status.side_effect = Exception("HTTP 503")
+async def test_scrape_skips_item_without_price(scraper):
+    cards = [{
+        "id": "301",
+        "url": "https://www.kabum.com.br/produto/301/produto-sem-preco",
+        "title": "Produto sem preço",
+        "price": None,
+        "old_price": None,
+        "discount": None,
+        "image": None,
+        "installment": None,
+    }]
+    deals = await scraper._scrape(_make_page_mock(cards))
+    assert deals == []
 
-    with patch("src.scrapers.kabum_scraper.httpx.AsyncClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=err_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_cls.return_value = mock_client
 
-        try:
-            deals = await scraper.fetch()
-            assert deals == []
-        except Exception:
-            pass  # erro propagado também é comportamento aceitável
+@pytest.mark.asyncio
+async def test_scrape_returns_empty_when_selector_not_found(scraper):
+    page = AsyncMock()
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.wait_for_selector = AsyncMock(side_effect=Exception("Timeout"))
+    deals = await scraper._scrape(page)
+    assert deals == []
+
+
+@pytest.mark.asyncio
+async def test_scrape_skips_invalid_image(scraper):
+    cards = [{
+        "id": "401",
+        "url": "https://www.kabum.com.br/produto/401/produto-sem-img",
+        "title": "Produto sem imagem válida",
+        "price": "999.0",
+        "old_price": "1500.0",
+        "discount": None,
+        "image": "data:image/gif;base64,R0lGOD...",
+        "installment": None,
+    }]
+    deals = await scraper._scrape(_make_page_mock(cards))
+    assert len(deals) == 1
+    assert deals[0].image_url is None
+
+
+@pytest.mark.asyncio
+async def test_scrape_source_and_store(scraper, mock_page):
+    deals = await scraper._scrape(mock_page)
+    for deal in deals:
+        assert deal.source == "kabum"
+        assert deal.store == "KaBuM"

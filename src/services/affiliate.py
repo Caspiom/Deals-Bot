@@ -1,6 +1,6 @@
 import re
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-from src.config.settings import AFFILIATE_ID, AMAZON_ASSOCIATE_TAG
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse, quote
+from src.config.settings import AFFILIATE_ID, AMAZON_ASSOCIATE_TAG, AMERICANAS_AWIN_MID
 
 # Domínios de agregadores que interceptam a comissão de afiliado.
 # Deals cujas URLs pertençam a esses domínios são descartados na pipeline.
@@ -36,6 +36,8 @@ def convert(url: str) -> str:
         return _mercadolivre(url)
     if "shopee.com.br" in url:
         return _shopee(url)
+    if "americanas.com.br" in url:
+        return _americanas(url)
     return _default(url)
 
 
@@ -70,6 +72,16 @@ def _shopee(url: str) -> str:
     params = parse_qs(parsed.query, keep_blank_values=True)
     params["af_id"] = [AFFILIATE_ID]
     return urlunparse(parsed._replace(query=urlencode(params, doseq=True)))
+
+
+def _americanas(url: str) -> str:
+    if not AMERICANAS_AWIN_MID:
+        return url
+    return (
+        f"https://www.awin1.com/cread.php"
+        f"?awinmid={AMERICANAS_AWIN_MID}&awinaffid={AFFILIATE_ID}"
+        f"&ued={quote(url, safe='')}"
+    )
 
 
 def _default(url: str) -> str:

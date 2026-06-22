@@ -15,6 +15,7 @@ from src.scrapers.aliexpress_scraper import AliExpressScraper
 from src.scrapers.amazon_scraper import AmazonScraper
 from src.scrapers.magalu_scraper import MagaluScraper
 from src.scrapers.shopee_scraper import ShopeeScraper
+from src.scrapers.americanas_scraper import AmericanasScraper
 from src.services.affiliate import convert, is_commissionable
 from src.services.copywriter import generate as generate_tagline
 from src.services.installment_calculator import estimate as estimate_installments
@@ -76,7 +77,9 @@ async def run_cycle(
 
     new_deals   = [d for d in monetizable if dedup.is_new(d)]
     hot_reposts = [d for d in monetizable if not dedup.is_new(d) and dedup.can_repost(d)]
-    to_publish  = new_deals + hot_reposts
+    # Ordena por desconto decrescente — publica os melhores deals primeiro,
+    # independente de qual scraper retornou mais volume.
+    to_publish  = sorted(new_deals, key=lambda d: d.discount_pct or 0, reverse=True) + hot_reposts
     logger.info(
         "{} deal(s) coletado(s) — {} bloqueado(s) — {} novo(s), {} re-post(s) → publicando em {} plataforma(s).",
         len(all_deals), blocked, len(new_deals), len(hot_reposts), len(publishers),
@@ -128,6 +131,7 @@ async def main() -> None:
         AliExpressScraper(),
         AmazonScraper(),
         ShopeeScraper(),
+        AmericanasScraper(),
     ]
     dedup = DedupFilter()
     publishers = _build_publishers()
