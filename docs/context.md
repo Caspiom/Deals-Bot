@@ -46,7 +46,9 @@
 deals-bot/
 │
 ├── docs/
-│   └── context.md              ← ESTE ARQUIVO (memória do projeto)
+│   ├── context.md              ← ESTE ARQUIVO (memória do projeto)
+│   ├── proxy_setup.md          ← Guia de proxy residencial BR (anti-bot)
+│   └── tracking_setup.md       ← Guia de DNS, Nginx/Caddy e SSL para o tracker
 │
 ├── src/
 │   ├── scrapers/
@@ -523,10 +525,7 @@ docker compose up -d
 - [x] `fastapi>=0.138.0` e `uvicorn[standard]>=0.49.0` adicionados via `uv add`
 - [x] 189/189 testes passando
 
-**Como rodar o servidor de tracking:**
-```bash
-TRACKER_BASE_URL=https://achadinhosbr.com/r uvicorn src.api.app:app --host 0.0.0.0 --port 8000
-```
+**Como rodar o servidor de tracking:** ver `docs/tracking_setup.md` — inclui configuração de DNS, Nginx/Caddy, SSL e systemd.
 O bot e a API compartilham o mesmo `deals.db` — rodam no mesmo servidor.
 
 **Configuração no `.env`:**
