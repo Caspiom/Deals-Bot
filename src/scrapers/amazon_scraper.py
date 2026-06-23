@@ -6,14 +6,9 @@ from src.models import Deal
 from src.scrapers.playwright_base_scraper import PlaywrightBaseScraper
 from src.utils.price_parser import parse_brl as _parse_brl
 
-# URL pré-filtrada: apenas deals com 40-90% OFF, evita poluição de produtos sem desconto real
-_DEALS_URL = (
-    "https://www.amazon.com.br/events/deals"
-    "?discounts-widget=%2522%257B%255C%2522state%255C%2522%253A%257B%255C%2522rangeRefinement"
-    "Filters%255C%2522%253A%257B%255C%2522percentOff%255C%2522%253A%257B%255C%2522min%255C%2522"
-    "%253A40%252C%255C%2522max%255C%2522%253A90%257D%257D%257D%252C%255C%2522version%255C%2522"
-    "%253A1%257D%2522"
-)
+# Página base de Ofertas — sem filtro de % no servidor para maximizar volume.
+# O filtro de MIN_DISCOUNT_PERCENT já é aplicado no Python após extração.
+_DEALS_URL = "https://www.amazon.com.br/events/deals"
 
 # Extrator "Selector Agnostic": ancora nos links /dp/ e sobe via closest().
 # Seletores confirmados via inspeção do DOM da URL /events/deals com filtro 40-90%.

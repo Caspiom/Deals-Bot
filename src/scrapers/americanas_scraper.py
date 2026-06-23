@@ -1,11 +1,13 @@
 import httpx
 from loguru import logger
-from src.config.settings import MIN_DISCOUNT_PERCENT, AMERICANAS_MAX_DISCOUNT_PCT, PROXY_URL
+from src.config.settings import MIN_DISCOUNT_PERCENT, PROXY_URL
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
 from src.utils.retry import scraper_retry
 
 # VTEX Catalog API pública — sem autenticação, sem browser
+# OrderByTopSaleDESC = mais vendidos; esses têm preços de mercado reais
+# ao contrário de OrderByBestDiscountDESC que seleciona os ListPrice mais inflados.
 _API_URL = "https://www.americanas.com.br/api/catalog_system/pub/products/search/"
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -32,7 +34,7 @@ class AmericanasScraper(BaseScraper):
     @scraper_retry
     async def fetch(self) -> list[Deal]:
         params = {
-            "O": "OrderByBestDiscountDESC",
+            "O": "OrderByTopSaleDESC",
             "_from": "0",
             "_to": "49",
         }
@@ -78,12 +80,6 @@ class AmericanasScraper(BaseScraper):
                     logger.info("Americanas [dump] {} → DROP: desconto não determinado", pid)
                     continue
                 if discount_pct < MIN_DISCOUNT_PERCENT:
-                    continue
-                if discount_pct > AMERICANAS_MAX_DISCOUNT_PCT:
-                    logger.info(
-                        "Americanas [dump] {} → DROP: desconto {}% > teto {}% (ListPrice inflado)",
-                        pid, discount_pct, AMERICANAS_MAX_DISCOUNT_PCT,
-                    )
                     continue
 
                 title = product.get("productName") or ""

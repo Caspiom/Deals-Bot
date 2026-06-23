@@ -38,9 +38,6 @@ ALIEXPRESS_SECRET_KEY: str   = os.getenv("ALIEXPRESS_SECRET_KEY", "")
 ALIEXPRESS_TRACKING_ID: str  = os.getenv("ALIEXPRESS_TRACKING_ID", "")
 # Merchant ID da Americanas no Awin Brasil (obtido no painel Awin → My Advertisers)
 AMERICANAS_AWIN_MID: str      = os.getenv("AMERICANAS_AWIN_MID", "")
-# Teto de desconto para Americanas: o ListPrice do VTEX é preço de tabela nunca revisado,
-# gerando descontos de 90-97% que não refletem mercado real. 70% filtra esse ruído.
-AMERICANAS_MAX_DISCOUNT_PCT: int = int(os.getenv("AMERICANAS_MAX_DISCOUNT_PCT", "70"))
 
 # ── Scraper ──────────────────────────────────────────────────────────────────
 SCRAPE_INTERVAL_MINUTES: int  = int(os.getenv("SCRAPE_INTERVAL_MINUTES", "5"))

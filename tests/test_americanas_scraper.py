@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from src.scrapers.americanas_scraper import AmericanasScraper, _best_installment
-from src.config.settings import MIN_DISCOUNT_PERCENT, AMERICANAS_MAX_DISCOUNT_PCT
+from src.config.settings import MIN_DISCOUNT_PERCENT
 
 
 def _make_product(
@@ -104,8 +104,8 @@ async def test_fetch_filters_low_discount(scraper, mock_api):
 
 
 @pytest.mark.asyncio
-async def test_fetch_filters_inflated_list_price(scraper):
-    # R$4.99 com ListPrice R$49.90 = 90% → deve ser descartado (ListPrice inflado)
+async def test_fetch_accepts_high_discount_from_top_sale(scraper):
+    # Com OrderByTopSaleDESC, um desconto real de 90% num produto popular é válido
     product = _make_product("901", "Agenda 2026 Espiral Escolar", 4.99, 49.90)
     resp = _mock_response([product])
 
@@ -120,14 +120,9 @@ async def test_fetch_filters_inflated_list_price(scraper):
         mock_cls.return_value = mock_client
         deals = await scraper.fetch()
 
-    assert deals == []
+    assert len(deals) == 1
+    assert deals[0].discount_pct == 90
 
-
-@pytest.mark.asyncio
-async def test_fetch_respects_max_discount_ceiling(scraper, mock_api):
-    deals = await scraper.fetch()
-    for deal in deals:
-        assert deal.discount_pct <= AMERICANAS_MAX_DISCOUNT_PCT
 
 
 @pytest.mark.asyncio

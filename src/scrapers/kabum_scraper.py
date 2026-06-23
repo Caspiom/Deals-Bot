@@ -122,9 +122,9 @@ class KabumScraper(PlaywrightBaseScraper):
             logger.warning("KaBuM: nenhum link de produto encontrado — DOM vazio ou bloqueio.")
             return []
 
-        for i in range(6):
+        for i in range(15):
             await page.evaluate("window.scrollBy(0, window.innerHeight)")
-            await page.wait_for_timeout(600 + (i % 3) * 200)
+            await page.wait_for_timeout(500 + (i % 4) * 150)
 
         raw: list[dict] = await page.evaluate(_EXTRACT_JS)
         logger.info("KaBuM: {} cards extraídos do DOM.", len(raw))
