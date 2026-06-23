@@ -36,7 +36,7 @@ _EXTRACT_JS = """() => {
             original:    strikeEl?.innerText?.trim() ?? null,
             discount:    discEl?.innerText?.trim() ?? null,
             image:       (() => {
-                const raw = imgEl?.getAttribute('data-src') || imgEl?.src || null;
+                const raw = imgEl?.src || imgEl?.getAttribute('data-src') || null;
                 // ponytail: upgrade ML CDN thumbnail to original — _2X_ = retina thumb, -F/-I = front/item thumbnail
                 return raw ? raw.replace(/_\\d+X_/, '_').replace(/-(F|I)\\.(webp|jpg|png)$/i, '-O.$2') : null;
             })(),

@@ -66,7 +66,16 @@ _EXTRACT_JS = """() => {
             price:     priceStr,
             old_price: oldPriceStr,
             discount:  discountStr,
-            image:     card.querySelector('img')?.src ?? null,
+            image:     (() => {
+                const img = card.querySelector('img[class*="ProductCardImage"]') ?? card.querySelector('img');
+                if (!img) return null;
+                try {
+                    const sizes = JSON.parse(img.getAttribute('data-a-dynamic-image') || '{}');
+                    const best = Object.keys(sizes).sort((a,b) => sizes[b][0]*sizes[b][1] - sizes[a][0]*sizes[a][1])[0];
+                    if (best) return best;
+                } catch(_) {}
+                return img.src || null;
+            })(),
         });
     }
     return results;
