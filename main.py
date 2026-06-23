@@ -50,6 +50,22 @@ def _build_publishers() -> list[BasePublisher]:
     return publishers
 
 
+def _interleave_by_store(deals: list[Deal]) -> list[Deal]:
+    """Round-robin entre lojas, cada uma ordenada por desconto decrescente.
+    Garante diversidade de fonte sem deixar uma loja de alto volume monopolizar o ciclo."""
+    by_store: dict[str, list[Deal]] = {}
+    for d in sorted(deals, key=lambda d: d.discount_pct or 0, reverse=True):
+        by_store.setdefault(d.store, []).append(d)
+    result: list[Deal] = []
+    groups = list(by_store.values())
+    max_len = max((len(g) for g in groups), default=0)
+    for i in range(max_len):
+        for group in groups:
+            if i < len(group):
+                result.append(group[i])
+    return result
+
+
 async def run_cycle(
     scrapers: list[BaseScraper],
     dedup: DedupFilter,
@@ -79,9 +95,7 @@ async def run_cycle(
 
     new_deals   = [d for d in monetizable if dedup.is_new(d)]
     hot_reposts = [d for d in monetizable if not dedup.is_new(d) and dedup.can_repost(d)]
-    # Ordena por desconto decrescente — publica os melhores deals primeiro,
-    # independente de qual scraper retornou mais volume.
-    to_publish  = sorted(new_deals, key=lambda d: d.discount_pct or 0, reverse=True) + hot_reposts
+    to_publish  = _interleave_by_store(new_deals) + hot_reposts
     logger.info(
         "{} deal(s) coletado(s) — {} bloqueado(s) — {} novo(s), {} re-post(s) → publicando em {} plataforma(s).",
         len(all_deals), blocked, len(new_deals), len(hot_reposts), len(publishers),
