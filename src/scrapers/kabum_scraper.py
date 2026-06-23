@@ -170,7 +170,7 @@ class KabumScraper(PlaywrightBaseScraper):
                 parsed = parse_installment_string(item.get("installment") or "")
                 n_inst, v_inst = parsed if parsed else (None, None)
 
-                image = (item.get("image") or "").split("?")[0]
+                image = (item.get("image") or "").split("?")[0].replace("_m.jpg", "_g.jpg")
                 image_url = image if image.startswith("http") else None
 
                 deals.append(Deal(
