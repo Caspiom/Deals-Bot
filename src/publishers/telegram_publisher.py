@@ -1,4 +1,6 @@
 import asyncio
+import io
+import httpx
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from loguru import logger
@@ -8,6 +10,17 @@ from src.publishers.base_publisher import BasePublisher
 from src.services.category_classifier import classify
 from src.utils.formatters import brl
 from src.utils.retry import publisher_retry
+
+_IMG_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+
+
+async def _fetch_image(url: str) -> bytes | None:
+    try:
+        async with httpx.AsyncClient(headers={"User-Agent": _IMG_UA}, timeout=10, follow_redirects=True) as client:
+            r = await client.get(url)
+            return r.content if r.status_code == 200 else None
+    except Exception:
+        return None
 
 _RATE_LIMIT_DELAY = 1.5
 
@@ -74,9 +87,11 @@ class TelegramPublisher(BasePublisher):
         ]])
 
         if deal.image_url:
+            raw = await _fetch_image(deal.image_url)
+            photo = io.BytesIO(raw) if raw else deal.image_url
             await self._bot.send_photo(
                 chat_id=self._channel,
-                photo=deal.image_url,
+                photo=photo,
                 caption=caption,
                 parse_mode=ParseMode.HTML,
                 reply_markup=keyboard,
