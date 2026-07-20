@@ -112,3 +112,31 @@ async def test_pipeline_parallel_scrapers(dedup, publisher):
         await run_cycle([scraper_a, scraper_b], dedup, [p])
 
     assert bot.send_photo.call_count + bot.send_message.call_count == 2
+
+
+# ── diversidade de lojas no feed ─────────────────────────────────────────────
+
+def test_interleave_alternates_stores():
+    """Loja de alto volume não pode monopolizar o ciclo (AliExpress vs nacionais)."""
+    from main import _interleave_by_store
+    from src.models import Deal
+
+    deals = (
+        [Deal(title=f"ali {i}", url=f"https://a/{i}", price=10.0,
+              discount_pct=90 - i, store="AliExpress") for i in range(10)]
+        + [Deal(title="kabum", url="https://k/1", price=10.0, discount_pct=20, store="KaBuM")]
+        + [Deal(title="ml", url="https://m/1", price=10.0, discount_pct=15, store="Mercado Livre")]
+    )
+    top3 = [d.store for d in _interleave_by_store(deals)[:3]]
+    assert set(top3) == {"AliExpress", "KaBuM", "Mercado Livre"}
+
+
+def test_interleave_orders_each_store_by_discount():
+    from main import _interleave_by_store
+    from src.models import Deal
+
+    deals = [
+        Deal(title="a", url="https://a/1", price=10.0, discount_pct=30, store="X"),
+        Deal(title="b", url="https://a/2", price=10.0, discount_pct=70, store="X"),
+    ]
+    assert [d.discount_pct for d in _interleave_by_store(deals)] == [70, 30]

@@ -51,6 +51,21 @@ def _build_publishers() -> list[BasePublisher]:
     return publishers
 
 
+def _interleave_by_store(deals: list[Deal]) -> list[Deal]:
+    """Round-robin entre lojas, cada uma ordenada por desconto decrescente.
+
+    Sort global por desconto% deixa a loja de maior volume monopolizar o feed —
+    o AliExpress sozinho traz ~140 deals por ciclo com 50%+ de desconto, contra
+    poucas dezenas das lojas nacionais.
+    """
+    by_store: dict[str, list[Deal]] = {}
+    for d in sorted(deals, key=lambda d: d.discount_pct or 0, reverse=True):
+        by_store.setdefault(d.store, []).append(d)
+    groups = list(by_store.values())
+    return [g[i] for i in range(max((len(g) for g in groups), default=0))
+            for g in groups if i < len(g)]
+
+
 async def run_cycle(
     scrapers: list[BaseScraper],
     dedup: DedupFilter,
@@ -89,7 +104,7 @@ async def run_cycle(
 
     new_deals   = [d for d in monetizable if dedup.is_new(d)]
     hot_reposts = [d for d in monetizable if not dedup.is_new(d) and dedup.can_repost(d)]
-    to_publish  = sorted(new_deals, key=lambda d: d.discount_pct or 0, reverse=True) + hot_reposts
+    to_publish  = _interleave_by_store(new_deals) + hot_reposts
     logger.info(
         "{} deal(s) coletado(s) — {} bloqueado(s) — {} novo(s), {} re-post(s) → publicando em {} plataforma(s).",
         len(all_deals), blocked, len(new_deals), len(hot_reposts), len(publishers),
