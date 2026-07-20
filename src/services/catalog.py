@@ -42,6 +42,7 @@ class DealCatalog:
             CREATE TABLE IF NOT EXISTS catalog_deals (
                 id                TEXT PRIMARY KEY,
                 title             TEXT NOT NULL,
+                raw_title         TEXT NOT NULL DEFAULT '',
                 url               TEXT NOT NULL,
                 affiliate_url     TEXT NOT NULL DEFAULT '',
                 price             REAL NOT NULL,
@@ -65,11 +66,19 @@ class DealCatalog:
         """)
         # A migração precisa vir antes do índice: em banco antigo a coluna ainda
         # não existe e o CREATE INDEX falharia.
+        self._migrate_coluna("raw_title", "TEXT NOT NULL DEFAULT ''")
         self._migrate_category_group()
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_cd_group ON catalog_deals(category_group)"
         )
         self._conn.commit()
+
+    def _migrate_coluna(self, nome: str, tipo: str) -> None:
+        """ALTER TABLE idempotente para bancos criados antes da coluna existir."""
+        try:
+            self._conn.execute(f"ALTER TABLE catalog_deals ADD COLUMN {nome} {tipo}")
+        except sqlite3.OperationalError:
+            pass  # coluna já existe
 
     def _migrate_category_group(self) -> None:
         """Adiciona category_group em bancos criados antes da coluna existir.
@@ -101,7 +110,7 @@ class DealCatalog:
         now = datetime.now(UTC).isoformat()
         rows = [
             (
-                deal_id(d), d.title, d.url, d.affiliate_url, d.price, d.old_price,
+                deal_id(d), d.title, d.raw_title, d.url, d.affiliate_url, d.price, d.old_price,
                 d.discount_pct, d.image_url, d.store, d.source, categoria, group_of(categoria),
                 d.installments, d.installment_value, d.coupon_code, d.tax_note,
                 now, now,
@@ -113,16 +122,18 @@ class DealCatalog:
         self._conn.executemany(
             """
             INSERT INTO catalog_deals (
-                id, title, url, affiliate_url, price, old_price, discount_pct,
-                image_url, store, source, category, category_group, installments,
-                installment_value, coupon_code, tax_note, first_seen_at, last_seen_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                id, title, raw_title, url, affiliate_url, price, old_price,
+                discount_pct, image_url, store, source, category, category_group,
+                installments, installment_value, coupon_code, tax_note,
+                first_seen_at, last_seen_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             -- Tudo que é derivado do deal coletado precisa ser reescrito: a
             -- categoria é função do título, e congelá-la enquanto o título muda
             -- deixa o produto preso na classificação do primeiro ciclo.
             -- Só first_seen_at é preservado.
             ON CONFLICT(id) DO UPDATE SET
                 title             = excluded.title,
+                raw_title         = excluded.raw_title,
                 url               = excluded.url,
                 affiliate_url     = excluded.affiliate_url,
                 price             = excluded.price,
