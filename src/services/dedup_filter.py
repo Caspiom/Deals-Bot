@@ -65,7 +65,7 @@ class DedupFilter:
     def is_new(self, deal: Deal) -> bool:
         cur = self._conn.execute(
             "SELECT 1 FROM seen_deals WHERE url_hash = ?",
-            (self._hash(deal.url),),
+            (self._hash(deal.dedup_key or deal.url),),
         )
         return cur.fetchone() is None
 
@@ -77,7 +77,7 @@ class DedupFilter:
         """
         cur = self._conn.execute(
             "SELECT last_posted_at FROM seen_deals WHERE url_hash = ?",
-            (self._hash(deal.url),),
+            (self._hash(deal.dedup_key or deal.url),),
         )
         row = cur.fetchone()
         if row is None:
@@ -103,7 +103,7 @@ class DedupFilter:
                 INSERT INTO seen_deals (url_hash, seen_at, last_posted_at) VALUES (?, ?, ?)
                 ON CONFLICT(url_hash) DO UPDATE SET last_posted_at = excluded.last_posted_at
                 """,
-                (self._hash(deal.url), now, now),
+                (self._hash(deal.dedup_key or deal.url), now, now),
             )
             self._conn.commit()
         except sqlite3.OperationalError as exc:
@@ -116,7 +116,7 @@ class DedupFilter:
         seen: set[str] = set()
         rows: list[tuple[str, float, str]] = []
         for deal in deals:
-            h = self._hash(deal.url)
+            h = self._hash(deal.dedup_key or deal.url)
             if h not in seen:
                 seen.add(h)
                 rows.append((h, deal.price, now))
@@ -134,7 +134,7 @@ class DedupFilter:
             SELECT MIN(price), COUNT(*) FROM price_history
             WHERE url_hash = ? AND seen_at >= datetime('now', '-30 days')
             """,
-            (self._hash(deal.url),),
+            (self._hash(deal.dedup_key or deal.url),),
         )
         row = cur.fetchone()
         min_price = row[0] if row[0] is not None else deal.price

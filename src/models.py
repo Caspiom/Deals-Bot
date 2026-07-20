@@ -20,6 +20,9 @@ class Deal:
     tracked_url: str = ""
     is_price_low: bool = False
     tax_note: str | None = None
+    # Chave estável para dedup quando `url` muda a cada coleta (ex: promotion_link
+    # do AliExpress, gerado novo a cada chamada da API). Vazio = usa `url`.
+    dedup_key: str = ""
 
     def __post_init__(self) -> None:
         if (

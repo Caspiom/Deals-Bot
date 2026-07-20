@@ -130,3 +130,20 @@ def test_seen_at_preserved_on_repost(dedup):
     ).fetchone()
     # seen_at original deve ser preservado
     assert row[0] == original_time
+
+
+def test_dedup_key_beats_changing_url(dedup):
+    """URL volátil (ex: promotion_link do AliExpress) não deve gerar repost."""
+    first  = Deal(title="P", url="https://s.click.aliexpress.com/e/_AAA",
+                  price=10.0, source="aliexpress", dedup_key="aliexpress:123")
+    second = Deal(title="P", url="https://s.click.aliexpress.com/e/_BBB",
+                  price=10.0, source="aliexpress", dedup_key="aliexpress:123")
+    dedup.mark_seen(first)
+    assert dedup.is_new(second) is False
+
+
+def test_different_dedup_keys_are_independent(dedup):
+    a = Deal(title="A", url="https://x/1", price=10.0, dedup_key="aliexpress:1")
+    b = Deal(title="B", url="https://x/1", price=10.0, dedup_key="aliexpress:2")
+    dedup.mark_seen(a)
+    assert dedup.is_new(b) is True
