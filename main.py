@@ -6,7 +6,7 @@ from loguru import logger
 
 import src.utils.logger  # noqa: F401 — aciona setup_logger()
 
-from src.config.settings import SCRAPE_INTERVAL_MINUTES, ENABLED_PUBLISHERS, SHOW_ESTIMATED_INSTALLMENTS, MAX_DEALS_PER_RUN
+from src.config.settings import SCRAPE_INTERVAL_MINUTES, ENABLED_PUBLISHERS, SHOW_ESTIMATED_INSTALLMENTS, MAX_DEALS_PER_RUN, BACKUP_HOUR_UTC
 from src.models import Deal
 from src.scrapers.base_scraper import BaseScraper
 from src.scrapers.mercadolivre_scraper import MercadoLivreScraper
@@ -22,6 +22,7 @@ from src.services.installment_calculator import estimate as estimate_installment
 from src.services.dedup_filter import DedupFilter
 from src.services.tracker import ClickTracker
 from src.services.catalog import DealCatalog
+from src.services.backup import fazer_backup
 from src.publishers.base_publisher import BasePublisher
 from src.publishers.telegram_publisher import TelegramPublisher
 
@@ -174,6 +175,15 @@ async def main() -> None:
         max_instances=1,
         misfire_grace_time=60,
     )
+    # Backup diário: o histórico de preços leva semanas para acumular e não
+    # se recompra. VACUUM INTO roda com o bot em pé.
+    scheduler.add_job(
+        fazer_backup,
+        trigger="cron",
+        hour=BACKUP_HOUR_UTC,
+        misfire_grace_time=3600,
+    )
+
     scheduler.start()
 
     logger.info(

@@ -32,3 +32,5 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+data/backups/
+data/*.corrompido

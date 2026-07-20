@@ -76,6 +76,12 @@ CORS_ORIGINS: list[str] = [
     o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()
 ]
 
+# ── Backup ───────────────────────────────────────────────────────────────────
+# O histórico de preços é acumulado ao longo de semanas e não se recompra.
+BACKUP_DIR: Path      = BASE_DIR / os.getenv("BACKUP_DIR", "data/backups")
+BACKUP_KEEP: int      = int(os.getenv("BACKUP_KEEP", "7"))
+BACKUP_HOUR_UTC: int  = int(os.getenv("BACKUP_HOUR_UTC", "6"))  # 03h em Brasília
+
 # ── Banco de dados ───────────────────────────────────────────────────────────
 DATABASE_PATH: Path  = BASE_DIR / os.getenv("DATABASE_PATH", "data/deals.db")
 DEDUP_TTL_DAYS: int  = int(os.getenv("DEDUP_TTL_DAYS", "7"))
