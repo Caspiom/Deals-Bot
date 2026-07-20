@@ -177,8 +177,12 @@ class AliExpressScraper(BaseScraper):
 
                 tax_note = "🌐 Preço com impostos de importação incluídos (BR)" if has_local_price else None
 
+                # Chave de dedup pelo título, não pelo product_id: (a) promotion_link
+                # muda a cada chamada da API e (b) o mesmo produto é anunciado por
+                # vários vendedores com product_id distinto e título/imagem idênticos.
+                title = str(p.get("product_title", "")).strip()
                 deals.append(Deal(
-                    title=str(p.get("product_title", "")).strip(),
+                    title=title,
                     url=url,
                     price=price,
                     old_price=old_price if old_price and old_price > price else None,
@@ -187,6 +191,7 @@ class AliExpressScraper(BaseScraper):
                     source=self.name,
                     store="AliExpress",
                     tax_note=tax_note,
+                    dedup_key=f"aliexpress:{title.lower()}",
                 ))
 
             except Exception as exc:
@@ -195,6 +200,16 @@ class AliExpressScraper(BaseScraper):
                     p.get("product_id", "?"), exc,
                 )
                 continue
+
+        # Vendedores diferentes anunciam o mesmo produto — colapsa por dedup_key
+        # mantendo o mais barato, senão os dois seriam publicados no mesmo ciclo
+        # (is_new() é avaliado para todos os deals antes de qualquer mark_seen).
+        cheapest: dict[str, Deal] = {}
+        for d in deals:
+            current = cheapest.get(d.dedup_key)
+            if current is None or d.price < current.price:
+                cheapest[d.dedup_key] = d
+        deals = list(cheapest.values())
 
         logger.info("AliExpress: {} deals válidos após filtros.", len(deals))
         return deals

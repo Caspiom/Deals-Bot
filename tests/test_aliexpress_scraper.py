@@ -220,3 +220,36 @@ async def test_fetch_skips_missing_credentials():
          patch("src.scrapers.aliexpress_scraper.ALIEXPRESS_SECRET_KEY", ""):
         deals = await AliExpressScraper().fetch()
     assert deals == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_collapses_same_title_from_different_sellers(scraper):
+    """Mesmo produto anunciado por vendedores distintos (ids diferentes,
+    título idêntico) deve virar um único deal — o mais barato."""
+    dupes = [
+        {**_MOCK_PRODUCTS[0], "product_id": "7001", "local_sale_price": "90.00 BRL"},
+        {**_MOCK_PRODUCTS[0], "product_id": "7002", "local_sale_price": "70.00 BRL"},
+    ]
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = _make_response(dupes)
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("src.scrapers.aliexpress_scraper.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_cls.return_value = mock_client
+
+        deals = await scraper.fetch()
+
+    same = [d for d in deals if "Fone" in d.title]
+    assert len(same) == 1
+    assert same[0].price == 70.00
+
+
+@pytest.mark.asyncio
+async def test_dedup_key_is_title_based(scraper, mock_api):
+    deals = await scraper.fetch()
+    fone = next(d for d in deals if "Fone" in d.title)
+    assert fone.dedup_key == f"aliexpress:{fone.title.lower()}"
