@@ -64,6 +64,18 @@ REPOST_LOW_HOURS: int      = int(os.getenv("REPOST_LOW_HOURS", "48"))
 # Deixar vazio para desativar tracking (publishers usarão affiliate_url diretamente)
 TRACKER_BASE_URL: str = os.getenv("TRACKER_BASE_URL", "").rstrip("/")
 
+# ── Catálogo da API ──────────────────────────────────────────────────────────
+# Por quanto tempo um produto continua no site após a última vez que um scraper
+# o viu em promoção. Precisa ser bem maior que SCRAPE_INTERVAL_MINUTES: as páginas
+# de ofertas rotacionam os itens, então um produto ainda em promoção pode faltar
+# em alguns ciclos. Baixo demais = produto pisca no site; alto demais = oferta
+# vencida fica no ar.
+DEALS_ACTIVE_MINUTES: int = int(os.getenv("DEALS_ACTIVE_MINUTES", "180"))
+# Origens permitidas no CORS (frontend). Vazio = libera todas.
+CORS_ORIGINS: list[str] = [
+    o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()
+]
+
 # ── Banco de dados ───────────────────────────────────────────────────────────
 DATABASE_PATH: Path  = BASE_DIR / os.getenv("DATABASE_PATH", "data/deals.db")
 DEDUP_TTL_DAYS: int  = int(os.getenv("DEDUP_TTL_DAYS", "7"))

@@ -21,6 +21,7 @@ from src.services.copywriter import generate as generate_tagline
 from src.services.installment_calculator import estimate as estimate_installments
 from src.services.dedup_filter import DedupFilter
 from src.services.tracker import ClickTracker
+from src.services.catalog import DealCatalog
 from src.publishers.base_publisher import BasePublisher
 from src.publishers.telegram_publisher import TelegramPublisher
 
@@ -55,6 +56,7 @@ async def run_cycle(
     dedup: DedupFilter,
     publishers: list[BasePublisher],
     tracker: ClickTracker | None = None,
+    catalog: DealCatalog | None = None,
 ) -> None:
     logger.info(">>> Iniciando ciclo | scrapers={}", [s.name for s in scrapers])
 
@@ -73,9 +75,17 @@ async def run_cycle(
 
     # Descarta deals de agregadores que retêm a comissão de afiliado (diretriz 4.11)
     monetizable = [d for d in all_deals if is_commissionable(d.url)]
+
     blocked = len(all_deals) - len(monetizable)
     if blocked:
         logger.warning("⛔ {} deal(s) bloqueado(s) por URL de agregador (sem comissão nossa).", blocked)
+
+    # Alimenta o catálogo da API com TUDO que ainda está em promoção — não só o que
+    # vai ao Telegram (MAX_DEALS_PER_RUN limita a publicação, não o site).
+    if catalog:
+        for d in monetizable:
+            d.affiliate_url = convert(d.url)
+        catalog.upsert_many(monetizable)
 
     new_deals   = [d for d in monetizable if dedup.is_new(d)]
     hot_reposts = [d for d in monetizable if not dedup.is_new(d) and dedup.can_repost(d)]
@@ -136,6 +146,7 @@ async def main() -> None:
     ]
     dedup = DedupFilter()
     tracker = ClickTracker()
+    catalog = DealCatalog()
     publishers = _build_publishers()
 
     scheduler = AsyncIOScheduler()
@@ -143,7 +154,7 @@ async def main() -> None:
         run_cycle,
         trigger="interval",
         minutes=SCRAPE_INTERVAL_MINUTES,
-        args=[scrapers, dedup, publishers, tracker],
+        args=[scrapers, dedup, publishers, tracker, catalog],
         next_run_time=datetime.now(),
         max_instances=1,
         misfire_grace_time=60,
@@ -163,6 +174,7 @@ async def main() -> None:
         scheduler.shutdown(wait=False)
         dedup.close()
         tracker.close()
+        catalog.close()
         for p in publishers:
             if hasattr(p, "close"):
                 await p.close()
