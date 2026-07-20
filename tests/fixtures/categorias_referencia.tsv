@@ -1,0 +1,171 @@
+# Conjunto de referência para medir ACURÁCIA da classificação de categoria.
+#
+# Amostra estratificada (semente 42) do catálogo real: até 8 itens por categoria
+# prevista, mais 25 do balde 'geral' — o maior e o mais suspeito.
+#
+# Os rótulos são julgamento humano sobre o título, feitos SEM olhar a predição,
+# e devem ser revisados pelo dono do produto: são eles que definem o que é
+# "certo". Corrigir um rótulo aqui é esperado e barato; é o que mantém a métrica
+# honesta conforme o catálogo evolui.
+#
+# Itens genuinamente ambíguos foram rotulados pelo uso principal do produto
+# (ex: "Suporte de Headset" é acessório de mesa, não áudio). Produtos sem
+# categoria adequada no vocabulário (software, calculadora, amaciante de roupa)
+# ficam em 'geral' de propósito — 'geral' é um rótulo válido, não uma falha.
+#
+# formato: categoria_esperada <TAB> loja <TAB> titulo
+acessorio_smartwatch	AliExpress	Caixa de relógio com 5 slots
+acessorio_smartwatch	AliExpress	Pulseira para Apple Watch Series 10 11 46mm 42mm 9 7 8 5 SE 6 44mm 45mm 40mm
+acessorio_smartwatch	AliExpress	Protetor de tela para apple watch série 9-8-7-6 5 4 se ultra-2 49mm 41mm 45mm
+acessorio_smartwatch	AliExpress	Para samsung galaxy watch 7/6/6 clássico/5/5 pro/4/4 carregadores clássicos
+acessorio_smartwatch	AliExpress	Carregador magnético sem fio Essager para Apple Watch 8 7 6 5 4 3 2 SE
+acessorio_smartwatch	AliExpress	Pulseiras esportivas de silicone para apple watch band 45mm 44mm ultra2 49mm
+acessorio_smartwatch	AliExpress	Pulseira esportiva para apple watch band ultra 49mm 44mm 45mm 38/40mm/41mm
+acessorio_smartwatch	AliExpress	Pulseira de Silicone para Apple Watch
+eletronico_acessorio	AliExpress	Suporte magnético para carro, suporte universal para ventilação de ar
+ferramenta	AliExpress	Kit Universal de Reparo de Pneus a Vácuo: Parafuso de Fixação para Furos em
+utensilio_cozinha	AliExpress	Fatiador De Queijo De Creme De Algodão
+ferramenta	AliExpress	Punho portátil plástico da pintura do pulverizador de 1 pces, filme que muda de cor do carro re
+bebe	AliExpress	Suportes para copos de carrinho de bebê
+bebe	Americanas	Lenço Umedecido Dermatologicamente Testado Pampers Cuidado de Bebê 192un
+cabelo	Americanas	Sérum Capilar Força e Nutrição 95ml Pantene Bambu Proteção Térmica Antifrizz
+bolsa_mochila	AliExpress	Moda durável antiderrapante mochila saco de peito cinta arnês ombro ajustável acampamento ao ar
+bolsa_mochila	AliExpress	Mochila de viagem de embarque 40X30X20Cm, compatível com mochilas Ryanair, Easyjet e Wizardair
+bolsa_mochila	AliExpress	Mochila saco de peito cinta arnês alça de ombro ajustável para saco de
+bolsa_mochila	AliExpress	Bolsa de Perna para Motocicleta, Bolsa de Mensageiro para Motocicleta, Bolsa de Cintura Masculi
+bolsa_mochila	AliExpress	Mochila com alça fixa para bagagem de viagem
+bolsa_mochila	AliExpress	Flor mochila 2022 senhoras saco de moda mochila feminina saco fresco e doce
+bolsa_mochila	AliExpress	Mochila de Viagem para Embarque Easyjet
+bolsa_mochila	AliExpress	Mochila floral 2022, bolsa feminina da moda
+brinquedo	AliExpress	Brinquedo de Botão LED Clicável para Alívio do Estresse
+cabelo	Americanas	Kit Shampoo e Condicionador Reparação Molecular Pantene Bond Repair 300ml e 150ml Cabelos Danif
+bebe	AliExpress	Almofada Protetora de Cabeça para Bebês em Formato de Mochila
+casa_geral	AliExpress	Lâmpada solar multifuncional decoração de jardim ao ar livre luz solar led à
+eletronico_acessorio	AliExpress	Organizador de cabos, gerenciamento de cabos
+casa_geral	AliExpress	Organizador de porta-malas de carro de 1 pacote: alça dobrável e ergonômica
+eletronico_acessorio	AliExpress	Kerokuru cabo organizador gerenciamento de cabo enrolador fita protetor para
+casa_geral	Mercado Livre	Vaso Sanitário Tubrax Monobloco VAB0002 Caixa Acoplada Completo Privada Cor Branco
+utensilio_cozinha	AliExpress	Ferramenta de fazer bola de carne clipe de aço inoxidável redondo bola de arroz shaper colher a
+utensilio_cozinha	AliExpress	Redondo de aço inoxidável molde biscoito bolinho pele corte molde diy biscoito
+churrasco	AliExpress	Pinça de grelha de aço inoxidável, clipe de comida para churrasco, bife, pão, utensílios de coz
+fone_headset	KaBuM	Fone de Ouvido Gamer HyperX Cloud Earbuds II, Driver 14mm, Nintendo Switch e Mobile, Preto - 70
+console	KaBuM	Jogo Pokemon Violet, Nintendo Switch - HBCPALZYA
+console	Mercado Livre	Console Playstation 5 Slim Edição Digital 825 Gb
+console	KaBuM	Controle Sem Fio DualSense PS5, Edição Limitada Marathon, Branco - 1000051297
+console	KaBuM	Jogo Elden Ring Nightreign, PS5
+console	KaBuM	Jogo Pokemon Scarlet, Nintendo Switch - HBCPALZXA
+console	KaBuM	Controle Nintendo Switch Joy-Con, Vermelho e Azul - HBCAJAEA1
+eletrodomestico_grande	Amazon	Samsung Ar-condicionado Split Inverter WindFree AI 12.000 BTUs Frio Sem Vento AR12DYFAAWKNAZ 22
+eletrodomestico_grande	KaBuM	Ar Condicionado Portátil KABUM! smart 700, 12000 BTUs, Quente e Frio, Controle via App, Alexa/G
+utensilio_cozinha	Mercado Livre	Kit 10 Pote De Vidro Marmita Hermético 370ml Freezer Fitness Rishon
+utensilio_cozinha	Mercado Livre	Yab - Kit 5 Potes De Vidro Marmita C/ Tampa Hermético 640ml Retangular 4 Travas Borossilicato A
+eletrodomestico_pequeno	KaBuM	Robô Aspirador e Passa Pano KABUM! smart 900 - 5 Modos de Limpeza, Base 2 em 1, Mapeamento 3D -
+eletrodomestico_pequeno	AliExpress	Mini ventilador de mesa recarregável por USB
+utensilio_cozinha	Mercado Livre	Kit 10 Potes Herméticos Vidro 640ml Starhouse Marmita Forno Micro-ondas Airfryer com 4 travas d
+eletrodomestico_pequeno	AliExpress	Mini ventilador de mesa recarregável usb portátil pequeno ventilador para
+eletrodomestico_pequeno	Mercado Livre	Aspirador de Pó e Água WAP GTW 10 1400W de Potência com Bocal de Sopro
+eletrodomestico_pequeno	Mercado Livre	Aspirador De Pó Vertical E Portátil Wap High Speed Plus 1350w 1,2 Litros Filtro Hepa Tecnologia
+eletrodomestico_pequeno	Americanas	Liquidificador Mondial Easy Power L-550-BC 550W 1,9L Preto 110V
+eletrodomestico_pequeno	KaBuM	Robô Aspirador de Pó e Passa Pano KABUM! smart K1100, Mapeamento, MOP Rotativo, Autolimpante, a
+eletronico_acessorio	KaBuM	Teclado Semi-Mecânico Gamer Rise Mode G1, Rainbow, USB, Preto e Cinza - RM-TG-01-BG
+moveis	Mercado Livre	Cadeira De Escritorio Ergonomica Nr17 Glorious Marqs Home Giratoria Resistente Reforçada 180kg
+eletronico_acessorio	KaBuM	Teclado Gamer Semi Mecânico Rise Mode G1 Full, USB, Preto e Branco - RM-TG-01-BW
+eletronico_acessorio	AliExpress	LAXASFIT 2025 Novo Relógio Inteligente para Homens Mulheres Presente Tela de
+eletronico_acessorio	AliExpress	Relógio inteligente para mulheres e homens
+eletronico_acessorio	KaBuM	Mouse Gamer Sem Fio Logitech G305 LIGHTSPEED, 12000 DPI, 6 Botões, Preto - 910-005281
+moveis	Mercado Livre	Cadeira Escritório Ergonômica Genebra B500 Luvinco Cor Preto Com Suporte Lombar Estofado Mesh
+eletronico_acessorio	AliExpress	Relógio inteligente para mulheres relógio de pulso bluetooth conectado telefone
+eletronico_geral	Mercado Livre	TP-Link Tapo C500 Câmera de Segurança Wifi 1080P 360° Colorida IP65
+eletronico_geral	KaBuM	iPad Pro Apple, Tela 13", 256GB, Chip M4, Wi-Fi, Câmera Traseira 12MP, iPadOS 17, Preto Especia
+eletronico_geral	Mercado Livre	Câmera Segurança Ip Externa Wifi A28 App Icsee À Prova Dágua Ip66 Dome Lente Dupla Lentes 2 Em
+eletronico_geral	Mercado Livre	Kit 2 Câmera Segurança Ip Interna Externa Wifi iCSee Infravermelho Prova D’Água - HW
+ferramenta	AliExpress	5mm-13mm hex soquete conjunto porca driver chave de fenda bits manga bocais
+ferramenta	AliExpress	Conjunto de Chaves de Fenda Mini 25 em 1
+ferramenta	AliExpress	Kit de Ferramentas Manuais para Carro
+ferramenta	AliExpress	Ferramentas da família 1/4 conjunto kits de ferramentas mecânicas para
+ferramenta	AliExpress	Conjunto de Ferramentas Manuais para Carro iLMH
+ferramenta	AliExpress	Conjunto Extrator de Parafuso Danificado Broca HSS
+ferramenta	AliExpress	Set 5mm-13mm hex soquetes manga bocais porca driver conjunto chave de fenda
+utensilio_cozinha	AliExpress	Martelo Amaciador de Carne em Aço Inoxidável de Alta Resistência, Utensílio de Cozinha para Ama
+eletronico_acessorio	AliExpress	Adaptador de Fone de Ouvido Tipo C Portátil
+fone_headset	AliExpress	Fones de Ouvido Sem Fio Bluetooth 5.3 Q86 com Display Digital LED, 24 Horas de Duração, Headset
+fone_headset	AliExpress	Fone de ouvido Bluetooth T75 5.3 sem fio com condução óssea
+fone_headset	KaBuM	Headset Gamer Rise Mode G1, Drivers 50mm, P3 3.5mm, Preto - RM-HS-G1-FB
+fone_headset	AliExpress	M10 fone de ouvido sem fio Bluetooth
+eletronico_acessorio	KaBuM	Suporte de Headset Gamer, KBM! GAMING SHG200, RGB, 3x USB, Com Placa de som - KGSHG200PT
+fone_headset	KaBuM	Headset Gamer Razer BlackShark V2 X, Drivers 50mm, Microfone Cardioide, Surround 7.1, 3.5 mm, B
+fone_headset	KaBuM	Headset Gamer Redragon Zeus X, Chroma Mk.II, RGB, Som Surround 7.1, Drivers 53mm, USB, Preto e
+casa_geral	AliExpress	Luz Noturna com Sensor de Movimento
+geral	KaBuM	Kaspersky Antivírus Premium 20 Dispositivos 1 Ano, Digital para Download - KL1047KDNFS
+geral	KaBuM	Microsoft Windows 11 Pro 64 Bits ESD - Digital para Download - FQC-10572
+geral	Amazon	Downy Verão Tropical Amaciante Líquido Concentrado 3L (Rende 12L)
+casa_geral	AliExpress	Lâmpada com Sensor de Movimento Luz Noturna LED Sem Fio Recarregável via USB
+hardware_pc	KaBuM	Kit com 3 Ventoinhas Corsair RS120 ARGB, 120mm, PWM, Preto - CO-9050181-WW
+ferramenta	AliExpress	Conjunto de Escovas de Arame de Latão com Revestimento de Cobre (1/3/5 Peças)
+utensilio_cozinha	AliExpress	Mini máquina de selagem usb recarregável
+casa_geral	AliExpress	Sensor de movimento lâmpada luz noturna sem fio led usb tipo c recarregável
+geral	AliExpress	Urso bonito telefone encantos pingente kawaii anime chaveiro acessórios para
+geral	AliExpress	Conjunto de pincéis de maquiagem profissional – Kabuki macio e fofo e pincéis
+brinquedo	Mercado Livre	Kit 350 Figurinhas Do Álbum Copa Do Mundo 2026- 50 Envelopes
+hardware_pc	KaBuM	Fonte Cooler Master MWE Gold 850 V3, 850W, 80 Plus Ouro, ATX 3.1, PFC Ativo, Preto - MPE-8506-A
+utensilio_cozinha	AliExpress	Abridor de garrafas multifuncional ajustável
+fone_headset	AliExpress	Portátil sem fio bluetooth alto-falante led luz ipx4 à prova dwaterproof água
+eletrodomestico_pequeno	Amazon	Panificadora Automática Master Bread, Mondial, Preto, 700W, 110V - NPF-53
+geral	KaBuM	Kaspersky Antivírus Standard 3 Dispositivos 1 Ano, Digital para Download - KL1041KDCFS
+hardware_pc	KaBuM	Fonte Husky Sledger 750W, 80 Plus Gold, Cybenetics Gold, PFC Ativo, Full Modular, Bivolt - HFN7
+ferramenta	AliExpress	Lanterna de trabalho LED dobrável recarregável COB multifuncional com ímã
+brinquedo	Mercado Livre	Kit 700 Figurinha Do Álbum Copa Do Mundo 2026- 100 Envelopes
+geral	KaBuM	Calculadora Financeira HP12C Gold, 120 Funções, Visor LCD, RPN e ALG
+utensilio_cozinha	AliExpress	Nova cozinha multifuncional triturador de alho manual imprensa alho rolo
+casa_geral	AliExpress	Sensor de Movimento Luz Noturna Sem Fio
+utensilio_cozinha	AliExpress	Noz e Hard Spice Grinder, Noz-moscada
+casa_geral	AliExpress	Luz LED RGB multicolorida com plugue USB
+hardware_pc	KaBuM	Water Cooler Husky Glacier, Iluminação ARGB, 240mm, AMD e Intel, Preto - HWT600PT
+hardware_pc	KaBuM	Gabinete Gamer Corsair 4500X LX-R RGB, E-ATX, Mid Tower, E-ATX, Lateral e frontal em Vidro Curv
+hardware_pc	KaBuM	Processador AMD Ryzen 7 9800X3D, Cache 8MB, 8 Núcleos, 16 Threads, AM5 - 100-100001084WOF
+hardware_pc	KaBuM	Processador AMD Ryzen 7 7800X3D, 5.0GHz Max Turbo, Cache 104MB, AM5, 8 Núcleos, Vídeo Integrado
+hardware_pc	KaBuM	Gabinete Office Husky 200, Micro ATX, Mini ATX, Preto - HGO200PT
+hardware_pc	KaBuM	Gabinete Gamer 1STPLAYER RT5, Mid Tower, ATX, Lateral em Vidro Temperado, Preto - RT5-BK
+hardware_pc	KaBuM	Placa de Vídeo ASUS PRIME RTX 5070 O12G NVIDIA Geforce, 12GB, GDDR7, Blackwell e DLSS4, Ray Tra
+hardware_pc	KaBuM	Gabinete Gamer Kalkan Avalon Lite Wind, ATX, Frontal e Lateral em Vidro Temperado, 3 Ventoinhas
+moveis	KaBuM	Cadeira Gamer Husky Tempest 700, Até 145kg, Almofadas, Reclinável 150º, PU, Descanso para Pés,
+casa_geral	AliExpress	Sensor de movimento luz sem fio led night light tipo c recarregável luz armário
+utensilio_cozinha	AliExpress	Utensílio resto em forma de caranguejo silicone utensílio resto bancada concha
+moveis	KaBuM	Cadeira Gamer Husky Storm 100, Até 120kg, Almofadas, Reclinável 135º, PU, Preta - HCG100PT
+eletronico_acessorio	KaBuM	Base com Cooler para Notebook Rise Mode, Galaxy Black X4, LED - RM-CN-04-BB
+notebook	KaBuM	Notebook Lenovo IdeaPad Slim 3 AMD Ryzen 5 7535HS, 8GB, AMD Radeon Graphics, SSD 512GB, 15.3" W
+hardware_pc	KaBuM	Memória Para Notebook Adata XPG, 16GB, 5600MHz, DDR5, CL46 - AD5S560016G-S
+perfume	Mercado Livre	Perfume Sedutor Árabe Sabah 100ml Original Feminino
+perfume	Mercado Livre	O Boticário Floratta Rose Sucrée Eau De Parfum 75ml
+perfume	Mercado Livre	Perfume Armaf Club De Nuit Intense 105mL EDT
+eletronico_geral	KaBuM	Echo Show 8 Amazon (Geração mais recente), Grafite - B0DYC2GV1Z
+roupa	Mercado Livre	Kit 3 Camisetas Masculinas Polo Wear Sortido 1 G Lisa
+skincare	Mercado Livre	Creme Acetinado Hidratante Corporal Lily O Boticário 250g
+smartphone	Mercado Livre	Smartphone Motorola Edge 60 Neo 5g - 512gb 24gb (12gb Ram + 12gb Ram Boost) 50mp Sony Camera Mo
+smartphone	Mercado Livre	Smartphone Samsung Galaxy A36 5g 128gb 6gb Ram Câmera Tripla De Até 50mp Selfie De 12mp Ip67 Su
+smartphone	Mercado Livre	Smartphone Motorola Moto G15 - 256gb 12gb (4gb Ram+8gb Ram Boost) E Camera 50mp Com Ai E Night
+eletronico_acessorio	AliExpress	Suporte de Celular de Mesa em Formato de Coelho Fofo: Ajustável e Elevável para
+eletronico_acessorio	AliExpress	3a usb a para cabo relâmpago para iphone 14 13 12 11 pro max plus xr max usb um
+smartphone	Mercado Livre	Smartphone Infinix Smart 10 4GB RAM 256GB SSD Câmera 8MP + IA, Tela 6.67 HD+ 120Hz, Bateria 500
+eletronico_acessorio	AliExpress	Suporte para celular de alta qualidade
+smartphone	Mercado Livre	Smartphone Motorola Moto G56 5g - 256gb 16gb (8gb Ram+8gb Ram Boost) Camera 50mp Sony Lytia 600
+suplemento	Mercado Livre	Creatina Monohidratada 500g Growth Supplements - Sem Sabor em Pó
+suplemento	Mercado Livre	Creatina Monohidratada Pura 1kg Dark Lab Unidade Sem sabor
+suplemento	Mercado Livre	Creatina Monohidratada Pura 500g Dark Lab Unidade
+suplemento	Mercado Livre	Creatina 1kg Suplemento Monohidratada em pó 100% Pura - Soldiers Nutrition
+moveis	AliExpress	Venda quente rack de armazenamento de tela de computador e tv roteador sem fio
+casa_geral	AliExpress	Fita de Luz LED RGB USB 5V para TV
+tv_monitor	KaBuM	Monitor Gamer Gigabyte 25", FHD, 200Hz, 1ms, IPS, VRR, FreeSync Premium, HDR 10, Alto-falante E
+tv_monitor	Mercado Livre	Monitor Gamer Samsung Essential S3, 24" FHD, 120 Hz, HDMI, Preto
+eletronico_geral	KaBuM	Smart Streaming Amazon Fire TV Stick HD 2ª Geração, Full HD, Wi-Fi, Bluetooth, Comando de Voz A
+eletronico_acessorio	AliExpress	LAXASFIT Novo relógio inteligente masculino lanterna LED esportes ao ar livre relógio inteligen
+eletronico_acessorio	AliExpress	Smartwatch masculino feminino relógios de pulso inteligente mensagem monitor de
+tv_monitor	Mercado Livre	Smart Tv 43 Philco P43vik Roku Led Dolby Audio Wi-fi Hdmi Hdr Full Hd 110/220v
+utensilio_cozinha	AliExpress	Panela de forros de fritadeira de ar de silicone, cesta de fritadeira de ar, utensílios de cozi
+suplemento	Mercado Livre	Creatina Monohidratada em Pote 300g 100% Pura Dark Lab
+utensilio_cozinha	AliExpress	Panela de forros de silicone para fritadeira a ar
+utensilio_cozinha	AliExpress	Espátula de limpeza raspador de cozinha lâmina macia raspador escova suja pan
+utensilio_cozinha	AliExpress	Espátula e Pinça 2 em 1 de Nylon Antiaderente
+utensilio_cozinha	AliExpress	Protetor de Silicone para Alça de Panela
+chocolate_doce	Americanas	Creme de Avelã com Cacau Nutella 140g Pote Sem Glúten
+ferramenta	AliExpress	Kit de ferramentas de cola de pá de cabeça de metal 5 em 1: espátula de silicone

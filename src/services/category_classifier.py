@@ -12,9 +12,16 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"jogo\s*(de\s*)?(ps[45]|xbox|switch|nintendo)",
         r"\bvr\b|oculus|meta\s*quest",
     ]),
+    # Antes de smartphone: o acessório cita o aparelho ("suporte para celular",
+    # "cabo para iphone") e seria classificado como o próprio celular.
+    ("eletronico_acessorio", [
+        r"(suporte|capa|película|pelicula|cabo|carregador|adaptador)\s*.{0,25}(celular|iphone|telefone|smartphone|tablet)",
+        r"suporte\s*(magnético|magnetico|veicular|de\s*mesa|articulado)",
+        r"pop\s*socket|anel\s*(de\s*)?suporte",
+    ]),
     ("smartphone", [
         r"smartphone|iphone\s*\d|galaxy\s*[asmzf]\d|redmi\s*note|poco\s*[a-z]",
-        r"celular\b|motorola\s*(edge|moto\s*g)|xiaomi\s*\d",
+        r"\bcelular\b|motorola\s*(edge|moto\s*g)|xiaomi\s*\d",
     ]),
     ("notebook", [
         r"notebook|laptop|macbook|ultrabook|chromebook",
@@ -22,7 +29,7 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     ("tv_monitor", [
         r"\btv\b|televisão|televisor|smart\s*tv|oled|qled|neo\s*qled",
         r"monitor\s*(gamer|4k|144hz|ultrawide|curvo)?",
-        r"projetor\b",
+        r"\bprojetor\b",
     ]),
     ("fone_headset", [
         r"headset|headphone|fone\s*de\s*ouvido|earbuds|airpods|earphone",
@@ -32,7 +39,7 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     # Antes de eletronico_acessorio: o acessório de relógio cita "watch"/"smartwatch",
     # que lá casaria com o aparelho em si.
     ("acessorio_smartwatch", [
-        r"(pulseira|correia|bracelete)\s*.{0,20}(watch|rel[oó]gio|smartwatch|band\b)",
+        r"(pulseira|correia|bracelete)\s*.{0,20}(watch|rel[oó]gio|smartwatch|\bband\b)",
         r"(apple|galaxy|amazfit|huawei|xiaomi|mi)\s*watch",
         r"caixa\s*(de\s*)?rel[oó]gio|porta.?rel[oó]gio",
         r"(protetor|película|capa)\s*.{0,20}(watch|smartwatch)",
@@ -41,44 +48,44 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     # especificações e seriam capturados por engano. Antes de eletronico_acessorio,
     # senão "Placa-Mãe ... WiFi" cai como acessório.
     ("hardware_pc", [
-        r"processador\b(?!\s*de\s*aliment)|placa.?m[ãa]e|placa\s*de\s*v[íi]deo",
+        r"\bprocessador\b(?!\s*de\s*aliment)|placa.?m[ãa]e|placa\s*de\s*v[íi]deo",
         r"mem[óo]ria\s*ram|\bssd\b|\bhdd\b|\bnvme\b|hd\s*externo",
-        r"gabinete\b|water\s*cooler|air\s*cooler|cooler\s*(para\s*)?(cpu|processador)",
+        r"\bgabinete\b|water\s*cooler|air\s*cooler|cooler\s*(para\s*)?(cpu|processador)",
         r"fonte\s*(atx|modular|\d+\s*w)|pasta\s*térmica",
-        r"\brtx\s*\d|\bgtx\s*\d|radeon\b|geforce\b|ryzen\b|core\s*i[3579]\b",
+        r"\brtx\s*\d|\bgtx\s*\d|\bradeon\b|\bgeforce\b|\bryzen\b|core\s*i[3579]\b",
     ]),
     ("eletronico_acessorio", [
-        r"teclado\b|mouse\b|mousepad|webcam\b",
+        r"\bteclado\b|\bmouse\b|mousepad|\bwebcam\b",
         r"carregador|power\s*bank|cabo\s*(usb|hdmi|displayport)",
         r"adaptador|hub\s*usb|switch\s*hdmi",
         r"smartwatch|relógio\s*inteligente|band\s*\d|mi\s*band",
         r"impressora|scanner|cartucho|toner",
         # 'wi-fi' solto é característica, não produto: capturava câmera de
         # segurança, impressora e TV. Os termos ao lado já cobrem o roteador.
-        r"roteador|modem\b|repetidor\s*(de\s*)?sinal|mesh\b",
+        r"roteador|\bmodem\b|repetidor\s*(de\s*)?sinal|\bmesh\b",
     ]),
     # Componentes de PC saíram para hardware_pc, que roda antes. O 'processador'
     # solto aqui capturava "processador de alimentos" antes do eletrodoméstico.
     ("eletronico_geral", [
-        r"tablet|ipad|kindle\b",
+        r"tablet|ipad|\bkindle\b",
         r"\bpc\b\s*gamer|computador\s*(completo|gamer)?|desktop",
         r"pendrive|cart[ãa]o\s*(de\s*)?mem[óo]ria",
-        r"câmera\b|camera\b|gopro|drone\b",
+        r"\bcâmera\b|\bcamera\b|gopro|\bdrone\b",
     ]),
 
     # ── Moda ──────────────────────────────────────────────────────────────────
     # "estojo" fica de fora de propósito: casaria "AirPods com Estojo de Recarga".
     # O lookbehind descarta descrição de forma ("almofada em formato de mochila").
     ("bolsa_mochila", [
-        r"(?<!formato de )(mochila\b|bolsa\s*(feminina|masculina|de\s*ombro|transversal|térmica|tiracolo)?)",
-        r"mala\s*(de\s*)?(viagem|bordo|rodinha)|pochete\b|necessaire\b",
+        r"(?<!formato de )(\bmochila\b|bolsa\s*(feminina|masculina|de\s*ombro|transversal|térmica|tiracolo)?)",
+        r"mala\s*(de\s*)?(viagem|bordo|rodinha)|\bpochete\b|\bnecessaire\b",
         r"carteira\s*(masculina|feminina|de\s*couro|porta.?cart)",
         r"bolsa\s*(de\s*)?(not(e)?book|laptop)|case\s*(para\s*)?not(e)?book",
     ]),
     ("kit_intimo", [
         r"kit\s*\d+\s*(cueca|meia|calcinha|par)",
         r"\d+\s*(cuecas?|meias?|calcinhas?)\b",
-        r"cueca\b|calcinha\b|meia\b|lingerie|sutiã",
+        r"\bcueca\b|\bcalcinha\b|\bmeia\b|lingerie|sutiã",
     ]),
     ("calcado_esporte", [
         r"tênis\s*(nike|adidas|asics|new\s*balance|puma|mizuno|under\s*armour)",
@@ -86,7 +93,7 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"chuteira|tênis\s*futsal",
     ]),
     ("calcado", [
-        r"tênis\b|sandália|sapato\b|bota\b|chinelo|sapatilha|mocassim|scarpin|loafer",
+        r"\btênis\b|sandália|\bsapato\b|\bbota\b|chinelo|sapatilha|mocassim|scarpin|loafer",
     ]),
     ("roupa_esporte", [
         r"legging|calça\s*(de\s*)?(treino|yoga|academia|compressão)",
@@ -96,13 +103,13 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     ]),
     ("roupa_social", [
         r"camisa\s*social|camisa\s*(slim|fit|listrada|xadrez)",
-        r"calça\s*(social|alfaiataria|de\s*terno)|blazer|terno\b|gravata",
+        r"calça\s*(social|alfaiataria|de\s*terno)|blazer|\bterno\b|gravata",
         r"vestido\s*(festa|social|midi|longo)|saia\s*(midi|longa|social)",
     ]),
     ("roupa", [
-        r"camiseta|camis[ae]\b|polo\b",
-        r"calça\s*(jeans|moletom|cargo|jogger)|jeans\b|jogger\b",
-        r"vestido\b|blusa\b|saia\b|body\b|macacão",
+        r"camiseta|camis[ae]\b|\bpolo\b",
+        r"calça\s*(jeans|moletom|cargo|jogger)|\bjeans\b|\bjogger\b",
+        r"\bvestido\b|\bblusa\b|\bsaia\b|\bbody\b|macacão",
         r"jaqueta|casaco|moletom|hoodie|sobretudo|parka",
         r"pijama|conjunto\s*(de\s*)?(dormir|moletom)",
     ]),
@@ -110,61 +117,61 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     # ── Casa ──────────────────────────────────────────────────────────────────
     ("eletrodomestico_grande", [
         r"geladeira|refrigerador|freezer",
-        r"fogão|cooktop\b|forno\s*(elétrico|de\s*embutir)",
+        r"fogão|\bcooktop\b|forno\s*(elétrico|de\s*embutir)",
         r"máquina\s*de?\s*(lavar|secar)|lava.?(louça|roupas?)",
-        r"ar\s*condicionado|split\b",
+        r"ar\s*condicionado|\bsplit\b",
     ]),
     ("eletrodomestico_pequeno", [
         r"fritadeira\s*air|air\s*fryer|airfryer",
-        r"liquidificador|batedeira|processador\s*de\s*alimento|mixer\b",
+        r"liquidificador|batedeira|processador\s*de\s*alimento|\bmixer\b",
         r"micro.?ondas",
         r"ventilador|climatizador|purificador\s*de\s*ar",
         r"aspirador|robô\s*(de\s*)?(limpeza|aspirador)",
-        r"sanduicheira|wafleira|grill\b|churraqueira\s*elétrica",
+        r"sanduicheira|wafleira|\bgrill\b|churraqueira\s*elétrica",
     ]),
     ("cama_banho", [
         r"colchão|travesseiro|edredom|lençol|cobre.?leito|roupa\s*de\s*cama",
-        r"toalha\b|jogo\s*de\s*toalha|roupão",
+        r"\btoalha\b|jogo\s*de\s*toalha|roupão",
         r"cama\s*(box|casal|solteiro|queen|king)",
     ]),
     ("moveis", [
-        r"sofá|sofa|poltrona|puff\b",
-        r"armário|guarda.?roupa|estante|prateleira|rack\b|nicho\b",
+        r"sofá|sofa|poltrona|\bpuff\b",
+        r"armário|guarda.?roupa|estante|prateleira|\brack\b|\bnicho\b",
         r"mesa\s*(de\s*)?(jantar|escritório|estudo)|escrivaninha|bancada",
         r"cadeira\s*(escritório|gamer|de\s*jantar)|cadeira\s*de\s*escritório",
-        r"cama\b(?!\s*(de\s*)?(box|casal|queen|king|solteiro))",
+        r"\bcama\b(?!\s*(de\s*)?(box|casal|queen|king|solteiro))",
     ]),
     ("bebe", [
-        r"fralda\b|fralda\s*(descartável|pano|bebe|baby)",
+        r"\bfralda\b|fralda\s*(descartável|pano|bebe|baby)",
         r"lenço\s*umedecido|toalha\s*umedecida",
         r"pomada\s*(assadur|frald|bebê|baby)|bepantol",
         r"shampoo\s*\w*\s*(baby|infantil)|condicionador\s*\w*\s*(baby|infantil)",
-        r"johnson\s*baby|huggies\b|pampers\b|pequeno\s*príncipe",
+        r"johnson\s*baby|\bhuggies\b|\bpampers\b|pequeno\s*príncipe",
         r"banheira\s*(infantil|bebê|baby)|banheirinha",
-        r"mamadeira\b|chupeta\b|mordedor\s*(bebê|baby)|babador\b",
-        r"berço\b|carrinho\s*de\s*bebê|cadeirinha\s*(bebê|carro|auto)",
+        r"\bmamadeira\b|\bchupeta\b|mordedor\s*(bebê|baby)|\bbabador\b",
+        r"\bberço\b|carrinho\s*de\s*bebê|cadeirinha\s*(bebê|carro|auto)",
         r"monitor\s*(de\s*bebê|baby)|babá\s*eletrônica",
-        r"andador\b|bebê\s*conforto|moisés\b",
+        r"\bandador\b|bebê\s*conforto|\bmoisés\b",
     ]),
     ("utensilio_cozinha", [
-        r"panela|frigideira|wok\b|caldeirão|caçarola",
-        r"chaleira|cafeteira\b|french\s*press|aeropress",
-        r"pote|tupperware|marmita\b|pote\s*hermet",
-        r"copo\b|caneca\b|prato\b|tigela|jogo\s*(de\s*)?(cozinha|prato|copo|jantar)",
-        r"faca\b|tábua\s*de\s*corte|espátula",
+        r"panela|frigideira|\bwok\b|caldeirão|caçarola",
+        r"chaleira|\bcafeteira\b|french\s*press|aeropress",
+        r"pote|tupperware|\bmarmita\b|pote\s*hermet",
+        r"\bcopo\b|\bcaneca\b|\bprato\b|tigela|jogo\s*(de\s*)?(cozinha|prato|copo|jantar)",
+        r"\bfaca\b|tábua\s*de\s*corte|espátula",
     ]),
     ("casa_geral", [
         r"luminária|abajur|pendente|lustre|fita\s*led",
         r"tapete|cortina|persiana|almofada|decoração",
         r"caixa\s*organizadora|organizador|cesto|cabide",
-        r"quadro\b|espelho\b|vaso\b|planta\b",
+        r"\bquadro\b|\bespelho\b|\bvaso\b|\bplanta\b",
     ]),
 
     # ── Alimento ──────────────────────────────────────────────────────────────
     ("churrasco", [
-        r"kit\s*churrasco|churrasqueira|grelha\b|espeto\b|faca\s*(churrasco|de\s*churrasco)",
+        r"kit\s*churrasco|churrasqueira|\bgrelha\b|\bespeto\b|faca\s*(churrasco|de\s*churrasco)",
         r"tábua\s*de\s*churrasco|pegador\s*(churrasco|de\s*churrasco)|avental\s*churrasco",
-        r"carvão\b|acendedor\b|gás\s*(butano|propano)|weber\b",
+        r"\bcarvão\b|\bacendedor\b|gás\s*(butano|propano)|\bweber\b",
     ]),
     ("cafe", [
         r"\bcafé\b|nescafé|cappuccino|cápsula\s*(nespresso|dolce|café)",
@@ -173,33 +180,33 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     ("condimento", [
         r"ketchup|maionese|mostarda|molho\s*(shoyu|inglês|tabasco|pimenta|barbecue)",
         r"azeite|vinagre|vinagrete|tempero|condimento|colorau|páprica",
-        r"manteiga\s*de\s*amendoim|pasta\s*de\s*amendoim|geleia|mel\b",
+        r"manteiga\s*de\s*amendoim|pasta\s*de\s*amendoim|geleia|\bmel\b",
     ]),
     ("chocolate_doce", [
-        r"chocolate\b|bombom|barra\s*de\s*chocolate|trufa|kit\s*kat|ferrero",
+        r"\bchocolate\b|bombom|barra\s*de\s*chocolate|trufa|kit\s*kat|ferrero",
         r"biscoito|bolacha|cookie|wafer|cracker|recheado",
-        r"sorvete|brigadeiro|doce\b|açaí\b",
+        r"sorvete|brigadeiro|\bdoce\b|\baçaí\b",
     ]),
     ("bebida_alcoolica", [
         r"cerveja|long\s*neck|pack\s*(cerveja|heineken|brahma|stella)",
-        r"vinho\b|espumante|prosecco|champagne",
+        r"\bvinho\b|espumante|prosecco|champagne",
         r"whisky|whiskey|bourbon|scotch|single\s*malt",
-        r"\bgin\b|vodka|cachaça|rum\b|licor\b|tequila",
+        r"\bgin\b|vodka|cachaça|\brum\b|\blicor\b|tequila",
     ]),
     ("suplemento", [
         r"whey\s*(protein|isolado|concentrado)|proteína\s*(em\s*pó|isolada)",
-        r"creatina\b|pré.?treino|hipercalórico|albumina\b|bcaa\b|glutamina",
-        r"colágeno\b|ômega\s*3|vitamina\s*[cdek]\b|multivitamínico",
+        r"\bcreatina\b|pré.?treino|hipercalórico|\balbumina\b|\bbcaa\b|glutamina",
+        r"\bcolágeno\b|ômega\s*3|vitamina\s*[cdek]\b|multivitamínico",
     ]),
     ("alimento", [
-        r"arroz\b|feijão\b|lentilha|grão.de.bico|quinoa",
-        r"macarrão|espaguete|lasanha|massa\b|nhoque",
-        r"leite\b|iogurte|queijo|requeijão|manteiga\b",
-        r"suco\b|néctar|achocolatado|vitamina\b",
+        r"\barroz\b|\bfeijão\b|lentilha|grão.de.bico|quinoa",
+        r"macarrão|espaguete|lasanha|\bmassa\b|nhoque",
+        r"\bleite\b|iogurte|queijo|requeijão|\bmanteiga\b",
+        r"\bsuco\b|néctar|achocolatado|\bvitamina\b",
         r"energético|isotônico|água\s*de\s*coco|água\s*(mineral|com\s*gás)",
-        r"atum\b|sardinha|frango\s*(enlatado|grelhado)|carne\s*seca",
+        r"\batum\b|sardinha|frango\s*(enlatado|grelhado)|carne\s*seca",
         r"pipoca|amendoim|castanha|granola|barra\s*de\s*cereal|snack",
-        r"farinha|fermento|açúcar|sal\b|óleo\s*(de\s*)?(soja|girassol|coco)",
+        r"farinha|fermento|açúcar|\bsal\b|óleo\s*(de\s*)?(soja|girassol|coco)",
         r"refrigerante|coca.?cola|pepsi|guaraná",
     ]),
 
@@ -207,21 +214,23 @@ _PATTERNS: list[tuple[str, list[str]]] = [
 
     # ── Beleza e Higiene ──────────────────────────────────────────────────────
     ("perfume", [
-        r"perfume\b|eau\s*de\s*(parfum|toilette|cologne)|deo\s*(colônia|parfum)",
-        r"body\s*splash|body\s*mist|colônia\b(?!.*dental)",
+        r"\bperfume\b|eau\s*de\s*(parfum|toilette|cologne)|deo\s*(colônia|parfum)",
+        r"body\s*splash|body\s*mist|\bcolônia\b(?!.*dental)",
+    ]),
+    ("cabelo", [
+        # 'capilar' qualifica o produto como de cabelo mesmo quando o formato
+        # (sérum, creme, ampola) também existe em skincare.
+        r"\bcapilar\b|\bshampoo\b|\bcondicionador\b|máscara\s*(capilar|de\s*hidratação)",
+        r"creme\s*de?\s*cabelo|leave.?in|óleo\s*capilar|finalizador\s*capilar",
+        r"tratamento\s*capilar|ampola\s*(capilar|de\s*tratamento)",
+        r"progressiva|relaxamento|coloração|\btintura\b|descoloração",
     ]),
     ("skincare", [
         r"hidratante\s*(facial|pele|rosto)|creme\s*(facial|anti.?idade|cc\s*cream|bb\s*cream)",
-        r"sérum\b|vitamina\s*c\s*facial|ácido\s*(hialurônico|glicólico|retinóico)",
+        r"\bsérum\b|vitamina\s*c\s*facial|ácido\s*(hialurônico|glicólico|retinóico)",
         r"protetor\s*solar|filtro\s*solar|fps\s*\d+|bloqueador\s*solar",
         r"esfoliante\s*facial|tônico\s*facial|máscara\s*facial|demaquilante",
-        r"loção\s*corporal|creme\s*corporal|nivea\b|vaselina\b|hidratante\b",
-    ]),
-    ("cabelo", [
-        r"shampoo\b|condicionador\b|máscara\s*(capilar|de\s*hidratação)",
-        r"creme\s*de?\s*cabelo|leave.?in|óleo\s*capilar|finalizador\s*capilar",
-        r"tratamento\s*capilar|ampola\s*(capilar|de\s*tratamento)",
-        r"progressiva|relaxamento|coloração|tintura\b|descoloração",
+        r"loção\s*corporal|creme\s*corporal|\bnivea\b|\bvaselina\b|\bhidratante\b",
     ]),
     ("barba", [
         r"barbeador|barbeadora|gillette|aparelho\s*de\s*barbear",
@@ -230,81 +239,81 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"óleo\s*de\s*barba|cera\s*de\s*barba|balm\s*de\s*barba",
     ]),
     ("higiene", [
-        r"sabonete\b|sabão\s*(em\s*)?(barra|líquido)",
-        r"desodorante\b|antitranspirante",
+        r"\bsabonete\b|sabão\s*(em\s*)?(barra|líquido)",
+        r"\bdesodorante\b|antitranspirante",
         r"pasta\s*de?\s*dente|escova\s*de?\s*dente|fio\s*dental|enxaguante\s*bucal",
-        r"absorvente\b|fralda\b|lenço\s*umedecido|pomada\s*(assadur|frald)",
+        r"\babsorvente\b|\bfralda\b|lenço\s*umedecido|pomada\s*(assadur|frald)",
         r"barbeador\s*(descartável)?(?!.*elétrico)",
     ]),
 
     # ── Esporte e Saúde ───────────────────────────────────────────────────────
     ("musculacao", [
-        r"haltere\b|kettlebell\b|anilha\b|barra\s*(olímpica|de\s*musculação|fixa)|supino\b",
+        r"\bhaltere\b|\bkettlebell\b|\banilha\b|barra\s*(olímpica|de\s*musculação|fixa)|\bsupino\b",
         r"rack\s*(de\s*musculação|de\s*agachamento)|estação\s*de\s*musculação",
         r"cinto\s*(musculação|academia)|luva\s*(musculação|academia|treino)",
     ]),
     ("cardio_outdoor", [
-        r"bicicleta\s*(ergométrica|spinning|speed|mtb)|bike\b",
+        r"bicicleta\s*(ergométrica|spinning|speed|mtb)|\bbike\b",
         r"esteira\s*(ergométrica|elétrica)?",
-        r"elíptico\b|transport\b|remo\s*ergométrico",
-        r"patins\b|skate\b|trotinete|patinete|longboard",
+        r"\belíptico\b|\btransport\b|remo\s*ergométrico",
+        r"\bpatins\b|\bskate\b|trotinete|patinete|longboard",
     ]),
     ("esporte", [
         r"\bbola\b|chuteira|caneleira|goleiro",
-        r"raquete\b|peteca\b|frescobol",
+        r"\braquete\b|\bpeteca\b|frescobol",
         r"corda\s*de?\s*pular|elástico\s*de?\s*treino|faixa\s*elástica|miniband",
         r"luva\s*(boxe|muay thai)|protetor\s*(bucal|canela)",
-        r"mochila\s*esport|bolsa\s*academia|squeeze\b|garrafa\s*esport|coqueteleira",
-        r"mat\s*(yoga|pilates)|colchonete|step\b",
+        r"mochila\s*esport|bolsa\s*academia|\bsqueeze\b|garrafa\s*esport|coqueteleira",
+        r"mat\s*(yoga|pilates)|colchonete|\bstep\b",
     ]),
 
     # ── Ferramentas ───────────────────────────────────────────────────────────
     ("ferramenta_eletrica", [
-        r"furadeira\b|parafusadeira\b|martelete\b|mandril\b",
-        r"serra\s*(circular|tico.tico|mármore)|esmerilhadeira\b|lixadeira\b|plaina\b",
+        r"\bfuradeira\b|\bparafusadeira\b|\bmartelete\b|\bmandril\b",
+        r"serra\s*(circular|tico.tico|mármore)|\besmerilhadeira\b|\blixadeira\b|\bplaina\b",
         r"parafusadeira\s*(a\s*bateria|sem\s*fio)",
     ]),
     ("ferramenta", [
-        r"martelo\b|chave\s*de?\s*fenda|chave\s*combinada|alicate\b|torquesa\b|chave\s*inglesa",
+        r"\bmartelo\b|chave\s*de?\s*fenda|chave\s*combinada|\balicate\b|\btorquesa\b|chave\s*inglesa",
         r"kit\s*(de\s*)?ferramenta|conjunto\s*(de\s*)?ferramenta|maleta\s*(de\s*)?ferramenta",
         r"extensão\s*elétrica|tomada\s*(múltipla|tripla)|régua\s*(elétrica|filtro)",
-        r"cano\b|torneira\b|válvula\b|registro\b|sifão\b",
-        r"trena\b|nível\b|esquadro\b|parafuso\b|bucha\b",
+        r"\bcano\b|\btorneira\b|\bválvula\b|\bregistro\b|\bsifão\b",
+        r"\btrena\b|\bnível\b|\besquadro\b|\bparafuso\b|\bbucha\b",
     ]),
 
     # ── Livros ────────────────────────────────────────────────────────────────
     ("livro_negocio", [
         r"(livro|box).*?(empreendedorismo|negócio|marketing|liderança|investimento|finanças\s*pessoais|hábitos|produtividade)",
-        r"pai\s*rico|mindset|start.?up|lean\b|agile\b|scrum\b",
+        r"pai\s*rico|mindset|start.?up|\blean\b|\bagile\b|\bscrum\b",
     ]),
     ("livro", [
         r"\blivro\b|e.?book",
         r"\bkindle\b",
-        r"mangá|hq\b|quadrinho|graphic\s*novel",
-        r"box\s*(de\s*)?livro|coleção\s*(de\s*)?livro|saga\b",
-        r"romance\b|ficção\b|fantasia\b|thriller\b|autoajuda\b",
+        r"mangá|\bhq\b|quadrinho|graphic\s*novel",
+        r"box\s*(de\s*)?livro|coleção\s*(de\s*)?livro|\bsaga\b",
+        r"\bromance\b|\bficção\b|\bfantasia\b|\bthriller\b|\bautoajuda\b",
     ]),
 
     # ── Brinquedos ────────────────────────────────────────────────────────────
     ("brinquedo_educativo", [
         r"\blego\b|blocos\s*de?\s*montar|nanoblock|magnetico\s*block",
-        r"quebra.?cabeça|puzzle\b",
-        r"jogo\s*de\s*tabuleiro|card\s*game|rpg\b|uno\b|monopoly|detetive\b",
+        r"quebra.?cabeça|\bpuzzle\b",
+        r"jogo\s*de\s*tabuleiro|card\s*game|\brpg\b|\buno\b|monopoly|\bdetetive\b",
     ]),
     ("brinquedo", [
-        r"brinquedo\b|boneca\b|boneco\b",
+        r"\bbrinquedo\b|\bboneca\b|\bboneco\b",
         r"carrinho\s*(de\s*)?brinquedo|pista\s*de\s*corrida|hot\s*wheels",
-        r"pelúcia\b|ursinho\b",
-        r"massinha\b|argila\s*colorida|slime\b",
+        r"\bpelúcia\b|\bursinho\b",
+        r"\bmassinha\b|argila\s*colorida|\bslime\b",
         r"controle\s*remoto\s*(carro|avião|helicóptero)",
     ]),
 
     # ── Pets ──────────────────────────────────────────────────────────────────
     ("pet", [
-        r"ração\b|petisco\b|snack\s*(pet|cachorro|gato)",
-        r"coleira\b|guia\b|focinheira\b|peitoral\b",
-        r"arranhador|cama\s*(pet|cachorro|gato)|casinha\b",
-        r"brinquedo\s*(pet|cachorro|gato)|mordedor\b",
+        r"\bração\b|\bpetisco\b|snack\s*(pet|cachorro|gato)",
+        r"\bcoleira\b|\bguia\b|\bfocinheira\b|\bpeitoral\b",
+        r"arranhador|cama\s*(pet|cachorro|gato)|\bcasinha\b",
+        r"brinquedo\s*(pet|cachorro|gato)|\bmordedor\b",
         r"areia\s*(sanitária|para\s*gato)|caixa\s*de\s*areia",
         r"shampoo\s*(pet|cachorro|gato)",
     ]),
