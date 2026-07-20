@@ -24,6 +24,15 @@ class Deal:
     # do AliExpress, gerado novo a cada chamada da API). Vazio = usa `url`.
     dedup_key: str = ""
 
+    def key(self) -> str:
+        """Identidade estável do produto — base do dedup e do id no catálogo.
+
+        Usa dedup_key quando o scraper fornece um (URL volátil); senão a URL sem
+        query string/fragment, para que parâmetros de tracking não criem um novo
+        produto a cada coleta."""
+        raw = self.dedup_key or self.url
+        return raw.split("?")[0].split("#")[0].rstrip("/")
+
     def __post_init__(self) -> None:
         if (
             self.discount_pct is None

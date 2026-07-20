@@ -56,16 +56,13 @@ class DedupFilter:
         )
         self._conn.commit()
 
-    def _hash(self, url: str) -> str:
-        # Remove query string e fragment para que o mesmo produto
-        # não seja tratado como novo quando parâmetros de tracking mudam.
-        clean = url.split("?")[0].split("#")[0].rstrip("/")
-        return hashlib.sha256(clean.encode()).hexdigest()
+    def _hash(self, key: str) -> str:
+        return hashlib.sha256(key.encode()).hexdigest()
 
     def is_new(self, deal: Deal) -> bool:
         cur = self._conn.execute(
             "SELECT 1 FROM seen_deals WHERE url_hash = ?",
-            (self._hash(deal.dedup_key or deal.url),),
+            (self._hash(deal.key()),),
         )
         return cur.fetchone() is None
 
@@ -77,7 +74,7 @@ class DedupFilter:
         """
         cur = self._conn.execute(
             "SELECT last_posted_at FROM seen_deals WHERE url_hash = ?",
-            (self._hash(deal.dedup_key or deal.url),),
+            (self._hash(deal.key()),),
         )
         row = cur.fetchone()
         if row is None:
@@ -103,7 +100,7 @@ class DedupFilter:
                 INSERT INTO seen_deals (url_hash, seen_at, last_posted_at) VALUES (?, ?, ?)
                 ON CONFLICT(url_hash) DO UPDATE SET last_posted_at = excluded.last_posted_at
                 """,
-                (self._hash(deal.dedup_key or deal.url), now, now),
+                (self._hash(deal.key()), now, now),
             )
             self._conn.commit()
         except sqlite3.OperationalError as exc:
@@ -116,7 +113,7 @@ class DedupFilter:
         seen: set[str] = set()
         rows: list[tuple[str, float, str]] = []
         for deal in deals:
-            h = self._hash(deal.dedup_key or deal.url)
+            h = self._hash(deal.key())
             if h not in seen:
                 seen.add(h)
                 rows.append((h, deal.price, now))
@@ -134,7 +131,7 @@ class DedupFilter:
             SELECT MIN(price), COUNT(*) FROM price_history
             WHERE url_hash = ? AND seen_at >= datetime('now', '-30 days')
             """,
-            (self._hash(deal.dedup_key or deal.url),),
+            (self._hash(deal.key()),),
         )
         row = cur.fetchone()
         min_price = row[0] if row[0] is not None else deal.price
