@@ -71,10 +71,16 @@ TRACKER_BASE_URL: str = os.getenv("TRACKER_BASE_URL", "").rstrip("/")
 # em alguns ciclos. Baixo demais = produto pisca no site; alto demais = oferta
 # vencida fica no ar.
 DEALS_ACTIVE_MINUTES: int = int(os.getenv("DEALS_ACTIVE_MINUTES", "180"))
-# Origens permitidas no CORS (frontend). Vazio = libera todas.
+# Origens permitidas no CORS (frontend). Só importa para chamadas feitas pelo
+# NAVEGADOR — o site busca dados em Server Component, então quem chama a API é o
+# servidor da Vercel. Manter restrito mesmo assim, por defesa em profundidade.
 CORS_ORIGINS: list[str] = [
     o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()
 ]
+# Segredo compartilhado com o frontend. Vazio = API aberta (modo desenvolvimento).
+# Em produção, exposta na internet, isto é o que impede terceiros de consumirem
+# o catálogo e os links de afiliado.
+API_TOKEN: str = os.getenv("API_TOKEN", "")
 
 # ── Backup ───────────────────────────────────────────────────────────────────
 # O histórico de preços é acumulado ao longo de semanas e não se recompra.

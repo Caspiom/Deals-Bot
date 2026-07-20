@@ -85,3 +85,50 @@ def test_cors_header_present(client):
     c, _ = client
     resp = c.get("/deals", headers={"Origin": "https://achadinhosbr.com"})
     assert "access-control-allow-origin" in resp.headers
+
+
+# ── autenticação (API exposta na internet) ───────────────────────────────────
+
+@pytest.fixture
+def client_com_token(tmp_path, monkeypatch):
+    """API com API_TOKEN configurado, como em produção."""
+    import src.api.app as app_module
+
+    monkeypatch.setattr(app_module, "API_TOKEN", "segredo-de-teste")
+    catalog = DealCatalog(db_path=tmp_path / "api.db")
+    catalog.upsert_many([_deal()])
+    monkeypatch.setattr(app_module, "_catalog", catalog)
+    with TestClient(app_module.app) as c:
+        yield c
+    catalog.close()
+
+
+@pytest.mark.parametrize("rota", ["/deals", "/filters", "/stats"])
+def test_rotas_de_dados_exigem_token(client_com_token, rota):
+    assert client_com_token.get(rota).status_code == 401
+
+
+def test_token_correto_libera(client_com_token):
+    resp = client_com_token.get("/deals", headers={"x-api-token": "segredo-de-teste"})
+    assert resp.status_code == 200 and resp.json()["total"] == 1
+
+
+def test_token_errado_bloqueia(client_com_token):
+    resp = client_com_token.get("/deals", headers={"x-api-token": "chute"})
+    assert resp.status_code == 401
+
+
+def test_redirect_permanece_publico(client_com_token):
+    """É o link que o usuário clica no Telegram — não pode exigir token."""
+    assert client_com_token.get("/r/inexistente").status_code == 404  # não 401
+
+
+def test_health_permanece_publico(client_com_token):
+    resp = client_com_token.get("/health")
+    assert resp.status_code == 200 and resp.json() == {"status": "ok"}
+
+
+def test_sem_token_configurado_api_fica_aberta(client):
+    """Desenvolvimento local: sem API_TOKEN, nada é exigido."""
+    c, _ = client
+    assert c.get("/deals").status_code == 200

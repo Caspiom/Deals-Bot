@@ -1,3 +1,7 @@
+# Bot e API compartilham o mesmo SQLite: o bot escreve, a API lê. Rodam em
+# containers separados porque têm perfis opostos — o bot é pesado e cíclico
+# (Chromium), a API é leve e constante. Separar evita que um ciclo de scraping
+# atrapalhe o atendimento das requisições.
 services:
   deals-bot:
     build: .
@@ -9,3 +13,25 @@ services:
     # limita uso de memória — Playwright + Chromium precisam de pelo menos 1GB
     mem_limit: 1.5g
     memswap_limit: 1.5g
+
+  api:
+    build: .
+    env_file: .env
+    command: >
+      uv run uvicorn src.api.app:app
+      --host 0.0.0.0 --port 8000 --proxy-headers
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    # API_BIND=127.0.0.1 (padrão) só aceita conexão local — para a Vercel
+    # alcançar a API, use 0.0.0.0 e proteja com API_TOKEN.
+    ports:
+      - "${API_BIND:-127.0.0.1}:8000:8000"
+    restart: unless-stopped
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 60s
+      timeout: 5s
+      retries: 3

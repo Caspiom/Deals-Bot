@@ -1,8 +1,10 @@
-from fastapi import FastAPI, Query
+import secrets
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
 
-from src.config.settings import CORS_ORIGINS
+from src.config.settings import API_TOKEN, CORS_ORIGINS
 from src.services.catalog import DealCatalog
 from src.services.tracker import ClickTracker
 
@@ -15,11 +17,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def exige_token(x_api_token: str = Header(default="")) -> None:
+    """Protege os dados do catálogo quando a API está exposta na internet.
+
+    API_TOKEN vazio libera o acesso — é o modo de desenvolvimento local. A
+    comparação usa compare_digest para não vazar o segredo pelo tempo de
+    resposta.
+    """
+    if not API_TOKEN:
+        return
+    if not secrets.compare_digest(x_api_token, API_TOKEN):
+        raise HTTPException(status_code=401, detail="token inválido ou ausente")
+
+
 _tracker = ClickTracker()
 _catalog = DealCatalog()
 
 
-@app.get("/deals")
+@app.get("/deals", dependencies=[Depends(exige_token)])
 async def list_deals(
     q: str = Query("", description="Busca por título"),
     store: str = "",
@@ -38,7 +54,7 @@ async def list_deals(
     )
 
 
-@app.get("/deals/{deal_id}")
+@app.get("/deals/{deal_id}", dependencies=[Depends(exige_token)])
 async def get_deal(deal_id: str):
     deal = _catalog.get(deal_id)
     if not deal:
@@ -46,12 +62,13 @@ async def get_deal(deal_id: str):
     return deal
 
 
-@app.get("/filters")
+@app.get("/filters", dependencies=[Depends(exige_token)])
 async def filters():
     """Lojas e categorias disponíveis, com contagem — para montar os filtros."""
     return _catalog.facets()
 
 
+# Sem token de propósito: é o link que o usuário final clica no Telegram.
 @app.get("/r/{deal_id}")
 async def redirect(deal_id: str, s: str = ""):
     url = _tracker.get_affiliate_url(deal_id)
@@ -61,6 +78,12 @@ async def redirect(deal_id: str, s: str = ""):
     return RedirectResponse(url, status_code=302)
 
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(exige_token)])
 async def stats():
     return _tracker.get_stats()
+
+
+@app.get("/health")
+async def health():
+    """Endpoint público de monitoramento — não expõe dado do catálogo."""
+    return {"status": "ok"}
