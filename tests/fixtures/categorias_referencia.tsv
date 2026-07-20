@@ -67,12 +67,12 @@ eletrodomestico_pequeno	Mercado Livre	Aspirador de Pó e Água WAP GTW 10 1400W 
 eletrodomestico_pequeno	Mercado Livre	Aspirador De Pó Vertical E Portátil Wap High Speed Plus 1350w 1,2 Litros Filtro Hepa Tecnologia
 eletrodomestico_pequeno	Americanas	Liquidificador Mondial Easy Power L-550-BC 550W 1,9L Preto 110V
 eletrodomestico_pequeno	KaBuM	Robô Aspirador de Pó e Passa Pano KABUM! smart K1100, Mapeamento, MOP Rotativo, Autolimpante, a
-eletronico_acessorio	KaBuM	Teclado Semi-Mecânico Gamer Rise Mode G1, Rainbow, USB, Preto e Cinza - RM-TG-01-BG
+periferico_pc	KaBuM	Teclado Semi-Mecânico Gamer Rise Mode G1, Rainbow, USB, Preto e Cinza - RM-TG-01-BG
 moveis	Mercado Livre	Cadeira De Escritorio Ergonomica Nr17 Glorious Marqs Home Giratoria Resistente Reforçada 180kg
-eletronico_acessorio	KaBuM	Teclado Gamer Semi Mecânico Rise Mode G1 Full, USB, Preto e Branco - RM-TG-01-BW
+periferico_pc	KaBuM	Teclado Gamer Semi Mecânico Rise Mode G1 Full, USB, Preto e Branco - RM-TG-01-BW
 eletronico_acessorio	AliExpress	LAXASFIT 2025 Novo Relógio Inteligente para Homens Mulheres Presente Tela de
 eletronico_acessorio	AliExpress	Relógio inteligente para mulheres e homens
-eletronico_acessorio	KaBuM	Mouse Gamer Sem Fio Logitech G305 LIGHTSPEED, 12000 DPI, 6 Botões, Preto - 910-005281
+periferico_pc	KaBuM	Mouse Gamer Sem Fio Logitech G305 LIGHTSPEED, 12000 DPI, 6 Botões, Preto - 910-005281
 moveis	Mercado Livre	Cadeira Escritório Ergonômica Genebra B500 Luvinco Cor Preto Com Suporte Lombar Estofado Mesh
 eletronico_acessorio	AliExpress	Relógio inteligente para mulheres relógio de pulso bluetooth conectado telefone
 eletronico_geral	Mercado Livre	TP-Link Tapo C500 Câmera de Segurança Wifi 1080P 360° Colorida IP65
@@ -92,7 +92,7 @@ fone_headset	AliExpress	Fones de Ouvido Sem Fio Bluetooth 5.3 Q86 com Display Di
 fone_headset	AliExpress	Fone de ouvido Bluetooth T75 5.3 sem fio com condução óssea
 fone_headset	KaBuM	Headset Gamer Rise Mode G1, Drivers 50mm, P3 3.5mm, Preto - RM-HS-G1-FB
 fone_headset	AliExpress	M10 fone de ouvido sem fio Bluetooth
-eletronico_acessorio	KaBuM	Suporte de Headset Gamer, KBM! GAMING SHG200, RGB, 3x USB, Com Placa de som - KGSHG200PT
+periferico_pc	KaBuM	Suporte de Headset Gamer, KBM! GAMING SHG200, RGB, 3x USB, Com Placa de som - KGSHG200PT
 fone_headset	KaBuM	Headset Gamer Razer BlackShark V2 X, Drivers 50mm, Microfone Cardioide, Surround 7.1, 3.5 mm, B
 fone_headset	KaBuM	Headset Gamer Redragon Zeus X, Chroma Mk.II, RGB, Som Surround 7.1, Drivers 53mm, USB, Preto e
 casa_geral	AliExpress	Luz Noturna com Sensor de Movimento
@@ -132,7 +132,7 @@ moveis	KaBuM	Cadeira Gamer Husky Tempest 700, Até 145kg, Almofadas, Reclinável
 casa_geral	AliExpress	Sensor de movimento luz sem fio led night light tipo c recarregável luz armário
 utensilio_cozinha	AliExpress	Utensílio resto em forma de caranguejo silicone utensílio resto bancada concha
 moveis	KaBuM	Cadeira Gamer Husky Storm 100, Até 120kg, Almofadas, Reclinável 135º, PU, Preta - HCG100PT
-eletronico_acessorio	KaBuM	Base com Cooler para Notebook Rise Mode, Galaxy Black X4, LED - RM-CN-04-BB
+periferico_pc	KaBuM	Base com Cooler para Notebook Rise Mode, Galaxy Black X4, LED - RM-CN-04-BB
 notebook	KaBuM	Notebook Lenovo IdeaPad Slim 3 AMD Ryzen 5 7535HS, 8GB, AMD Radeon Graphics, SSD 512GB, 15.3" W
 hardware_pc	KaBuM	Memória Para Notebook Adata XPG, 16GB, 5600MHz, DDR5, CL46 - AD5S560016G-S
 perfume	Mercado Livre	Perfume Sedutor Árabe Sabah 100ml Original Feminino

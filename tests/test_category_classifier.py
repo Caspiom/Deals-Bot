@@ -187,8 +187,46 @@ def test_vocabulario_expandido(titulo, esperado):
         ("Kit 10 Pote De Vidro Marmita Hermético 370ml Freezer Fitness", "utensilio_cozinha"),
         ("Creatina Monohidratada em Pote 300g 100% Pura", "suplemento"),
         ("Fone de Ouvido Gamer HyperX Cloud Earbuds II, Nintendo Switch", "fone_headset"),
-        ("Base com Cooler para Notebook Rise Mode, Galaxy Black X4", "eletronico_acessorio"),
     ],
 )
 def test_caracteristica_nao_rouba_produto(titulo, esperado):
+    assert classify(_deal(titulo)) == esperado
+
+
+# ── periférico de PC vs acessório de celular ─────────────────────────────────
+
+@pytest.mark.parametrize(
+    "titulo",
+    [
+        "Teclado Semi-Mecânico Gamer Rise Mode G1, Rainbow, USB",
+        "Mouse Gamer Sem Fio Logitech G305 LIGHTSPEED, 12000 DPI",
+        "Mousepad Gamer Speed 90x40cm",
+        "Webcam Full HD 1080p com Microfone",
+        "Mesa Digitalizadora Huion Inspiroy 2 S, Com Caneta",
+        "Suporte de Headset Gamer, KBM! GAMING SHG200, RGB",
+        "Base com Cooler para Notebook Rise Mode, Galaxy Black X4",
+    ],
+)
+def test_periferico_pc(titulo):
+    """Teclado e mouse pertencem ao público de PC, não ao de celular."""
+    assert classify(_deal(titulo)) == "periferico_pc"
+
+
+def test_periferico_pc_vai_para_grupo_informatica():
+    from src.services.category_classifier import group_of
+    assert group_of("periferico_pc") == "informatica"
+
+
+@pytest.mark.parametrize(
+    "titulo,esperado",
+    [
+        # O acessório de celular continua fora de periferico_pc.
+        ("Cabo de Dados Tipo C 20W com Carregamento Rápido", "eletronico_acessorio"),
+        ("Carregador magnético sem fio para celular", "eletronico_acessorio"),
+        # O aparelho em si não vira periférico.
+        ("Notebook Lenovo IdeaPad Slim 3 AMD Ryzen 5, SSD 512GB", "notebook"),
+        ("Headset Gamer Razer BlackShark V2 X, Drivers 50mm", "fone_headset"),
+    ],
+)
+def test_periferico_nao_rouba_vizinhos(titulo, esperado):
     assert classify(_deal(titulo)) == esperado

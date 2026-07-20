@@ -11,7 +11,6 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     ("eletronico_acessorio", [
         r"(suporte|capa|película|pelicula|cabo|carregador|adaptador)\s*.{0,25}(celular|iphone|telefone|smartphone|tablet)",
         r"suporte\s*(magnético|magnetico|veicular|de\s*mesa|articulado)",
-        r"(base|suporte)\s*.{0,20}(para\s*)?not(e)?book",
         r"pop\s*socket|anel\s*(de\s*)?suporte",
     ]),
     ("smartphone", [
@@ -21,6 +20,12 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     ("hardware_pc", [
         r"mem[óo]ria\s*(para\s*)?notebook",
     ]),
+    # Suporte/base de mesa: antes de fone_headset e notebook, que capturariam o
+    # produto citado no título em vez do acessório.
+    ("periferico_pc", [
+        r"(suporte|gancho|stand)\s*.{0,15}(fone|headset|headphone)",
+        r"(base|suporte)\s*.{0,20}(para\s*)?not(e)?book",
+    ]),
     ("notebook", [
         r"notebook|laptop|macbook|ultrabook|chromebook",
     ]),
@@ -29,9 +34,8 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"monitor\s*(gamer|4k|144hz|ultrawide|curvo|led|ips|full\s*hd)|\bmonitor\s+\d{2}",
         r"\bprojetor\b",
     ]),
-    # Acessório do fone, não o fone: precisa vir antes.
     ("eletronico_acessorio", [
-        r"(adaptador|suporte|gancho)\s*.{0,15}(fone|headset|headphone)",
+        r"adaptador\s*.{0,15}(fone|headset|headphone)",
         r"organizador\s*(de\s*)?cabo|gerenciamento\s*de\s*cabo|protetor\s*de\s*cabo",
     ]),
     ("fone_headset", [
@@ -65,12 +69,16 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"\bventoinhas?\b|\bfan\s*\d+\s*mm|\bcooler\s*box",
         r"\brtx\s*\d|\bgtx\s*\d|\bradeon\b|\bgeforce\b|\bryzen\b|core\s*i[3579]\b",
     ]),
+    ("periferico_pc", [
+        r"\bteclado\b|\bmouse\b|mousepad|mouse\s*pad|\bwebcam\b",
+        r"mesa\s*digitalizadora|headset\s*stand|suporte\s*(de\s*)?headset",
+        r"monitor\s*arm|suporte\s*(para\s*)?monitor|hub\s*usb.?c?\b",
+    ]),
     ("eletronico_acessorio", [
-        r"\bteclado\b|\bmouse\b|mousepad|\bwebcam\b",
         r"carregador|power\s*bank|cabo\s*(usb|hdmi|displayport|de\s*dados|tipo\s*c|lightning)",
         r"filtro\s*de\s*linha|estabilizador\b|\bnobreak\b|r[ée]gua\s*de\s*tomada",
         r"mesa\s*digitalizadora|rastreador\s*(gps|bluetooth)|air\s*?tags?\b",
-        r"adaptador|hub\s*usb|switch\s*hdmi",
+        r"adaptador|switch\s*hdmi",
         r"smartwatch|relógio\s*inteligente|band\s*\d|mi\s*band",
         r"impressora|scanner|cartucho|toner",
         # 'wi-fi' solto é característica, não produto: capturava câmera de
@@ -428,7 +436,7 @@ def classify(deal: Deal) -> str:
 #  - "Celular e Smartwatch" junto: acessório de um puxa a atenção do outro.
 
 _GROUP_MEMBERS: dict[str, list[str]] = {
-    "informatica": ["hardware_pc", "notebook"],
+    "informatica": ["hardware_pc", "notebook", "periferico_pc"],
     "celular": ["smartphone", "acessorio_smartwatch"],
     "audio": ["fone_headset"],
     "tv_video": ["tv_monitor"],
