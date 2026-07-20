@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from src.scrapers.aliexpress_scraper import AliExpressScraper, _parse_price, _sign
+from src.scrapers.aliexpress_scraper import AliExpressScraper, _parse_price, _sign, _clean_title
 from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
 
 
@@ -253,3 +253,60 @@ async def test_dedup_key_is_title_based(scraper, mock_api):
     deals = await scraper.fetch()
     fone = next(d for d in deals if "Fone" in d.title)
     assert fone.dedup_key == f"aliexpress:{fone.title.lower()}"
+
+
+# ── _clean_title ─────────────────────────────────────────────────────────────
+
+def test_clean_title_keeps_first_clause():
+    raw = ("Kit de Ferramentas Manuais para Carro, Conjunto de Ferramentas para "
+           "Desmontagem de Carros, Ferramenta para Reparo de Estéreo e DVD")
+    assert _clean_title(raw) == "Kit de Ferramentas Manuais para Carro"
+
+
+def test_clean_title_strips_quantity_prefix():
+    assert _clean_title("1 Unidade Gerador de Ruído de Grilo Oculto, Gadget de Pegadinha") \
+        == "Gerador de Ruído de Grilo Oculto"
+
+
+def test_clean_title_strips_orphan_preposition():
+    raw = ("1 unidade de caixa de relógio com 5 slots | Organizador de viagem de casca "
+           "dura com inserção de travesseiro - pronto para presente (preto)")
+    assert _clean_title(raw) == "Caixa de relógio com 5 slots"
+
+
+def test_clean_title_truncates_without_commas():
+    raw = ("F9 fones de ouvido sem fio led binaural tws sem fio bluetooth fone "
+           "à prova água redução ruído bluetooth")
+    out = _clean_title(raw)
+    assert len(out) <= 80 and not out.endswith(" ")
+
+
+def test_clean_title_appends_clause_when_first_too_short():
+    # primeira cláusula com menos de 30 chars ganha a seguinte para identificar o item
+    assert _clean_title("Armadilha para Caracóis, Capturador de Insetos para Pomar, Repelente") \
+        == "Armadilha para Caracóis, Capturador de Insetos para Pomar"
+
+
+def test_clean_title_leaves_good_title_alone():
+    assert _clean_title("Fone Bluetooth XB500") == "Fone Bluetooth XB500"
+
+
+@pytest.mark.asyncio
+async def test_fetch_cleans_title_but_dedups_on_original(scraper):
+    """Título exibido é limpo; a chave de dedup continua sobre o original."""
+    verbose = {**_MOCK_PRODUCTS[0],
+               "product_title": "Fone Bluetooth XB500, Headset Gamer, Fone Sem Fio, Fone TWS"}
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = _make_response([verbose])
+    mock_resp.raise_for_status = MagicMock()
+
+    with patch("src.scrapers.aliexpress_scraper.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_cls.return_value = mock_client
+        deals = await scraper.fetch()
+
+    assert deals[0].title == "Fone Bluetooth XB500, Headset Gamer"
+    assert deals[0].dedup_key == f"aliexpress:{verbose['product_title'].lower()}"

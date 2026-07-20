@@ -68,6 +68,41 @@ def _parse_price(value: str | None) -> float | None:
         return None
 
 
+# Títulos do AliExpress são keyword stuffing para SEO: o nome real do produto vem
+# na primeira cláusula e o resto é repetição ("Kit X, Ferramenta para Y, Ferramenta
+# para Z, ..."). Prefixos de quantidade ("1 peça", "5 pçs") também não agregam.
+# O \s*(?:de|da|do)\s+ final remove a preposição órfã em "1 unidade DE caixa...".
+_QTY_PREFIX_RE = _re.compile(
+    r"^\s*\d+\s*(unidades?|peças?|pçs?|pcs?|pçs|sets?|conjuntos?|un|kits?)\b[\s,./-]*"
+    r"(?:(?:de|da|do)\s+)?",
+    _re.IGNORECASE,
+)
+_MAX_TITLE = 80
+
+
+def _clean_title(raw: str) -> str:
+    title = _QTY_PREFIX_RE.sub("", str(raw).replace("|", ",").strip())
+
+    # Primeira cláusula = nome do produto. Anexa a próxima enquanto ficar curto
+    # demais para identificar o item.
+    parts = [p.strip() for p in title.split(",") if p.strip()]
+    title = ""
+    for part in parts:
+        candidate = f"{title}, {part}" if title else part
+        if title and len(candidate) > _MAX_TITLE:
+            break
+        title = candidate
+        if len(title) >= 30:
+            break
+
+    # Sem vírgulas o corte acima não atua — trunca em fronteira de palavra.
+    if len(title) > _MAX_TITLE:
+        title = title[:_MAX_TITLE].rsplit(" ", 1)[0].rstrip(" ,.-")
+
+    # Muitos vêm todos em minúsculas por tradução automática.
+    return title[:1].upper() + title[1:] if title else str(raw).strip()
+
+
 class AliExpressScraper(BaseScraper):
     name = "aliexpress"
 
@@ -180,9 +215,12 @@ class AliExpressScraper(BaseScraper):
                 # Chave de dedup pelo título, não pelo product_id: (a) promotion_link
                 # muda a cada chamada da API e (b) o mesmo produto é anunciado por
                 # vários vendedores com product_id distinto e título/imagem idênticos.
+                # dedup_key usa o título ORIGINAL: é ele que vem idêntico entre
+                # vendedores do mesmo produto. O título limpo é só exibição — cortá-lo
+                # antes agruparia produtos diferentes sob o mesmo prefixo.
                 title = str(p.get("product_title", "")).strip()
                 deals.append(Deal(
-                    title=title,
+                    title=_clean_title(title),
                     url=url,
                     price=price,
                     old_price=old_price if old_price and old_price > price else None,
