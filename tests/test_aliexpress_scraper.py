@@ -6,7 +6,7 @@ from src.config.settings import MIN_DISCOUNT_PERCENT, MAX_DEALS_PER_RUN
 
 def _make_response(products: list[dict]) -> dict:
     return {
-        "aliexpress_affiliate_hotproduct_query_response": {
+        "aliexpress_affiliate_product_query_response": {
             "resp_result": {
                 "resp_code": 200,
                 "resp_msg": "OK",
@@ -161,7 +161,7 @@ async def test_fetch_respects_max_deals(scraper, mock_api):
 @pytest.mark.asyncio
 async def test_fetch_handles_api_error(scraper):
     error_resp = {
-        "aliexpress_affiliate_hotproduct_query_response": {
+        "aliexpress_affiliate_product_query_response": {
             "resp_result": {
                 "resp_code": 500,
                 "resp_msg": "Internal error",

@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import time
 import httpx
@@ -14,6 +15,22 @@ from src.scrapers.base_scraper import BaseScraper
 from src.utils.retry import scraper_retry
 
 _API_URL = "https://api-sg.aliexpress.com/sync"
+
+# aliexpress.affiliate.hotproduct.query exige permissão extra (Advanced API) no
+# console AliExpress, não liberada por padrão. product.query é Standard API
+# (liberado por padrão) mas exige keywords ou category_ids — por isso a busca
+# roda em várias keywords de categorias diferentes e agrega os resultados.
+_METHOD = "aliexpress.affiliate.product.query"
+_KEYWORDS = [
+    "wireless earphones",
+    "smart watch",
+    "phone accessories",
+    "home gadgets",
+    "kitchen gadgets",
+    "led lights",
+    "tools set",
+    "backpack",
+]
 
 # localSalePrice / localOriginalPrice já vêm com impostos BR calculados pelo AliExpress
 _FIELDS = (
@@ -54,22 +71,18 @@ def _parse_price(value: str | None) -> float | None:
 class AliExpressScraper(BaseScraper):
     name = "aliexpress"
 
-    @scraper_retry
-    async def fetch(self) -> list[Deal]:
-        if not ALIEXPRESS_APP_KEY or not ALIEXPRESS_SECRET_KEY:
-            logger.warning("AliExpress: credenciais não configuradas. Scraper ignorado.")
-            return []
-
+    async def _search(self, client: httpx.AsyncClient, keywords: str) -> list[dict]:
         timestamp = str(int(time.time() * 1000))
         params: dict[str, str] = {
             "app_key": ALIEXPRESS_APP_KEY,
-            "method": "aliexpress.affiliate.hotproduct.query",
+            "method": _METHOD,
             "sign_method": "md5",
             "timestamp": timestamp,
             "v": "2.0",
             "fields": _FIELDS,
+            "keywords": keywords,
             "page_no": "1",
-            "page_size": "50",
+            "page_size": "20",
             "sort": "LAST_VOLUME_DESC",
             "target_currency": "BRL",
             "target_language": "PT",
@@ -77,36 +90,52 @@ class AliExpressScraper(BaseScraper):
         }
         params["sign"] = _sign(params, ALIEXPRESS_SECRET_KEY)
 
-        async with httpx.AsyncClient(timeout=20, proxy=PROXY_URL or None) as client:
-            resp = await client.post(_API_URL, data=params)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await client.post(_API_URL, data=params)
+        resp.raise_for_status()
+        data = resp.json()
 
-        wrapper = data.get("aliexpress_affiliate_hotproduct_query_response")
+        wrapper = data.get("aliexpress_affiliate_product_query_response")
         if not wrapper:
             logger.warning(
-                "AliExpress: chave de resposta não encontrada. Chaves presentes: {} | Trecho: {}",
-                list(data.keys()),
-                str(data)[:300],
+                "AliExpress ['{}']: chave de resposta não encontrada. Chaves presentes: {} | Trecho: {}",
+                keywords, list(data.keys()), str(data)[:300],
             )
             return []
 
         resp_result = wrapper.get("resp_result", {})
         if resp_result.get("resp_code") != 200:
             logger.warning(
-                "AliExpress: erro na API — código {} | {}",
-                resp_result.get("resp_code"),
-                resp_result.get("resp_msg", "desconhecido"),
+                "AliExpress ['{}']: erro na API — código {} | {}",
+                keywords, resp_result.get("resp_code"), resp_result.get("resp_msg", "desconhecido"),
             )
             return []
 
-        products = (
-            resp_result
-            .get("result", {})
-            .get("products", {})
-            .get("product", [])
-        )
-        logger.info("AliExpress: {} produtos recebidos.", len(products))
+        return resp_result.get("result", {}).get("products", {}).get("product", [])
+
+    @scraper_retry
+    async def fetch(self) -> list[Deal]:
+        if not ALIEXPRESS_APP_KEY or not ALIEXPRESS_SECRET_KEY:
+            logger.warning("AliExpress: credenciais não configuradas. Scraper ignorado.")
+            return []
+
+        async with httpx.AsyncClient(timeout=20, proxy=PROXY_URL or None) as client:
+            results = await asyncio.gather(
+                *[self._search(client, kw) for kw in _KEYWORDS],
+                return_exceptions=True,
+            )
+
+        products_by_id: dict[str, dict] = {}
+        for keywords, result in zip(_KEYWORDS, results):
+            if isinstance(result, Exception):
+                logger.warning("AliExpress ['{}']: falha na busca: {}", keywords, result)
+                continue
+            for p in result:
+                pid = p.get("product_id")
+                if pid and pid not in products_by_id:
+                    products_by_id[pid] = p
+
+        products = list(products_by_id.values())
+        logger.info("AliExpress: {} produtos únicos recebidos ({} keywords).", len(products), len(_KEYWORDS))
 
         deals: list[Deal] = []
         for p in products:
