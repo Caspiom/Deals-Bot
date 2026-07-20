@@ -29,22 +29,52 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"caixa\s*de\s*som|caixa\s*bluetooth|speaker|soundbar|subwoofer",
         r"fone\s*(bluetooth|sem\s*fio|gamer|anc|cancelamento)",
     ]),
+    # Antes de eletronico_acessorio: o acessório de relógio cita "watch"/"smartwatch",
+    # que lá casaria com o aparelho em si.
+    ("acessorio_smartwatch", [
+        r"(pulseira|correia|bracelete)\s*.{0,20}(watch|rel[oó]gio|smartwatch|band\b)",
+        r"(apple|galaxy|amazfit|huawei|xiaomi|mi)\s*watch",
+        r"caixa\s*(de\s*)?rel[oó]gio|porta.?rel[oó]gio",
+        r"(protetor|película|capa)\s*.{0,20}(watch|smartwatch)",
+    ]),
+    # Depois de smartphone/notebook: celular e notebook citam RAM, SSD e Ryzen nas
+    # especificações e seriam capturados por engano. Antes de eletronico_acessorio,
+    # senão "Placa-Mãe ... WiFi" cai como acessório.
+    ("hardware_pc", [
+        r"processador\b(?!\s*de\s*aliment)|placa.?m[ãa]e|placa\s*de\s*v[íi]deo",
+        r"mem[óo]ria\s*ram|\bssd\b|\bhdd\b|\bnvme\b|hd\s*externo",
+        r"gabinete\b|water\s*cooler|air\s*cooler|cooler\s*(para\s*)?(cpu|processador)",
+        r"fonte\s*(atx|modular|\d+\s*w)|pasta\s*térmica",
+        r"\brtx\s*\d|\bgtx\s*\d|radeon\b|geforce\b|ryzen\b|core\s*i[3579]\b",
+    ]),
     ("eletronico_acessorio", [
         r"teclado\b|mouse\b|mousepad|webcam\b",
         r"carregador|power\s*bank|cabo\s*(usb|hdmi|displayport)",
         r"adaptador|hub\s*usb|switch\s*hdmi",
         r"smartwatch|relógio\s*inteligente|band\s*\d|mi\s*band",
         r"impressora|scanner|cartucho|toner",
-        r"roteador|wi.?fi|modem|repetidor\s*sinal|mesh\b",
+        # 'wi-fi' solto é característica, não produto: capturava câmera de
+        # segurança, impressora e TV. Os termos ao lado já cobrem o roteador.
+        r"roteador|modem\b|repetidor\s*(de\s*)?sinal|mesh\b",
     ]),
+    # Componentes de PC saíram para hardware_pc, que roda antes. O 'processador'
+    # solto aqui capturava "processador de alimentos" antes do eletrodoméstico.
     ("eletronico_geral", [
         r"tablet|ipad|kindle\b",
-        r"\bpc\b|computador|desktop|processador|placa.*v[íi]deo|gpu|rtx|gtx|rx\s*\d",
-        r"\bssd\b|\bhdd?\b|memória\s*ram|\bram\b|pendrive|hd\s+externo",
+        r"\bpc\b\s*gamer|computador\s*(completo|gamer)?|desktop",
+        r"pendrive|cart[ãa]o\s*(de\s*)?mem[óo]ria",
         r"câmera\b|camera\b|gopro|drone\b",
     ]),
 
     # ── Moda ──────────────────────────────────────────────────────────────────
+    # "estojo" fica de fora de propósito: casaria "AirPods com Estojo de Recarga".
+    # O lookbehind descarta descrição de forma ("almofada em formato de mochila").
+    ("bolsa_mochila", [
+        r"(?<!formato de )(mochila\b|bolsa\s*(feminina|masculina|de\s*ombro|transversal|térmica|tiracolo)?)",
+        r"mala\s*(de\s*)?(viagem|bordo|rodinha)|pochete\b|necessaire\b",
+        r"carteira\s*(masculina|feminina|de\s*couro|porta.?cart)",
+        r"bolsa\s*(de\s*)?(not(e)?book|laptop)|case\s*(para\s*)?not(e)?book",
+    ]),
     ("kit_intimo", [
         r"kit\s*\d+\s*(cueca|meia|calcinha|par)",
         r"\d+\s*(cuecas?|meias?|calcinhas?)\b",
