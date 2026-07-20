@@ -7,7 +7,7 @@ from loguru import logger
 
 from src.config.settings import DATABASE_PATH, DEALS_ACTIVE_MINUTES
 from src.models import Deal
-from src.services.category_classifier import classify
+from src.services.category_classifier import classify, group_of
 
 _SORTS = {
     "discount": "discount_pct DESC, last_seen_at DESC",
@@ -51,6 +51,7 @@ class DealCatalog:
                 store             TEXT NOT NULL DEFAULT '',
                 source            TEXT NOT NULL DEFAULT '',
                 category          TEXT NOT NULL DEFAULT '',
+                category_group    TEXT NOT NULL DEFAULT '',
                 installments      INTEGER,
                 installment_value REAL,
                 coupon_code       TEXT,
@@ -62,7 +63,38 @@ class DealCatalog:
             CREATE INDEX IF NOT EXISTS idx_cd_store     ON catalog_deals(store);
             CREATE INDEX IF NOT EXISTS idx_cd_category  ON catalog_deals(category);
         """)
+        # A migração precisa vir antes do índice: em banco antigo a coluna ainda
+        # não existe e o CREATE INDEX falharia.
+        self._migrate_category_group()
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cd_group ON catalog_deals(category_group)"
+        )
         self._conn.commit()
+
+    def _migrate_category_group(self) -> None:
+        """Adiciona category_group em bancos criados antes da coluna existir.
+
+        Sem o backfill, as linhas antigas ficariam com grupo vazio até o produto
+        ser recoletado — e sumiriam do filtro do site nesse meio-tempo.
+        """
+        try:
+            self._conn.execute(
+                "ALTER TABLE catalog_deals ADD COLUMN category_group TEXT NOT NULL DEFAULT ''"
+            )
+        except sqlite3.OperationalError:
+            return  # coluna já existe
+
+        categorias = [
+            row[0]
+            for row in self._conn.execute(
+                "SELECT DISTINCT category FROM catalog_deals WHERE category != ''"
+            )
+        ]
+        self._conn.executemany(
+            "UPDATE catalog_deals SET category_group = ? WHERE category = ?",
+            [(group_of(c), c) for c in categorias],
+        )
+        logger.info("Catálogo: category_group preenchido para {} categoria(s).", len(categorias))
 
     def upsert_many(self, deals: list[Deal]) -> None:
         """Registra os deals do ciclo. Preserva first_seen_at de quem já existia."""
@@ -70,11 +102,11 @@ class DealCatalog:
         rows = [
             (
                 deal_id(d), d.title, d.url, d.affiliate_url, d.price, d.old_price,
-                d.discount_pct, d.image_url, d.store, d.source, classify(d),
+                d.discount_pct, d.image_url, d.store, d.source, categoria, group_of(categoria),
                 d.installments, d.installment_value, d.coupon_code, d.tax_note,
                 now, now,
             )
-            for d in deals
+            for d, categoria in ((d, classify(d)) for d in deals)
         ]
         if not rows:
             return
@@ -82,9 +114,9 @@ class DealCatalog:
             """
             INSERT INTO catalog_deals (
                 id, title, url, affiliate_url, price, old_price, discount_pct,
-                image_url, store, source, category, installments, installment_value,
-                coupon_code, tax_note, first_seen_at, last_seen_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                image_url, store, source, category, category_group, installments,
+                installment_value, coupon_code, tax_note, first_seen_at, last_seen_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             -- Tudo que é derivado do deal coletado precisa ser reescrito: a
             -- categoria é função do título, e congelá-la enquanto o título muda
             -- deixa o produto preso na classificação do primeiro ciclo.
@@ -100,6 +132,7 @@ class DealCatalog:
                 store             = excluded.store,
                 source            = excluded.source,
                 category          = excluded.category,
+                category_group    = excluded.category_group,
                 installments      = excluded.installments,
                 installment_value = excluded.installment_value,
                 coupon_code       = excluded.coupon_code,
@@ -119,6 +152,7 @@ class DealCatalog:
         q: str = "",
         store: str = "",
         category: str = "",
+        group: str = "",
         min_discount: int = 0,
         max_price: float | None = None,
         sort: str = "discount",
@@ -139,6 +173,9 @@ class DealCatalog:
         if category:
             where.append("category = ?")
             params.append(category)
+        if group:
+            where.append("category_group = ?")
+            params.append(group)
         if min_discount:
             where.append("discount_pct >= ?")
             params.append(min_discount)
@@ -184,7 +221,11 @@ class DealCatalog:
             ).fetchall()
             return [dict(r) for r in rows]
 
-        return {"stores": counts("store"), "categories": counts("category")}
+        return {
+            "stores": counts("store"),
+            "categories": counts("category"),
+            "groups": counts("category_group"),
+        }
 
     def purge_expired(self) -> int:
         """Remove definitivamente o que saiu de promoção há bastante tempo."""

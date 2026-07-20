@@ -147,3 +147,41 @@ def test_upsert_refreshes_tax_note(catalog):
     with_note.tax_note = "🌐 Preço com impostos incluídos"
     catalog.upsert_many([with_note])
     assert catalog.get(deal_id(with_note))["tax_note"] == "🌐 Preço com impostos incluídos"
+
+
+# ── grupos exibidos no site ──────────────────────────────────────────────────
+
+def test_group_derived_from_category(catalog):
+    d = _deal()
+    d.raw_title = "Placa de Vídeo RTX 5070"
+    catalog.upsert_many([d])
+    row = catalog.get(deal_id(d))
+    assert row["category"] == "hardware_pc"
+    assert row["category_group"] == "informatica"
+
+
+def test_filter_by_group(catalog):
+    gpu = _deal("GPU", store="KaBuM")
+    gpu.raw_title = "Placa de Vídeo RTX 5070"
+    fone = _deal("Fone", store="KaBuM")
+    fone.raw_title = "Fone de ouvido bluetooth"
+    catalog.upsert_many([gpu, fone])
+
+    assert catalog.search(group="informatica")["total"] == 1
+    assert catalog.search(group="audio")["total"] == 1
+
+
+def test_facets_expose_groups(catalog):
+    d = _deal()
+    d.raw_title = "Placa de Vídeo RTX 5070"
+    catalog.upsert_many([d])
+    grupos = {g["value"]: g["count"] for g in catalog.facets()["groups"]}
+    assert grupos == {"informatica": 1}
+
+
+def test_unmapped_category_falls_back_to_outros(catalog):
+    """Categoria sem grupo definido não pode sumir do filtro."""
+    catalog.upsert_many([_deal(title="Produto sem termo reconhecível")])
+    row = catalog.get(deal_id(_deal(title="Produto sem termo reconhecível")))
+    assert row["category"] == "geral"
+    assert row["category_group"] == "outros"

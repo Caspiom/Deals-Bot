@@ -384,3 +384,58 @@ def classify(deal: Deal) -> str:
             if pattern.search(title) or pattern.search(singular):
                 return category
     return "geral"
+
+
+# ── Agrupamento para o site ───────────────────────────────────────────────────
+# A categoria fina serve para classificar; o grupo serve para o usuário filtrar.
+# São coisas diferentes: 46 categorias finas viram um filtro inútil (metade com
+# 1 item), mas apagá-las perderia sinal — a composição do catálogo muda conforme
+# quais scrapers estão funcionando. Aqui o fino continua existindo e o site
+# mostra o grosso.
+#
+# Recorte pensado para compra online no Brasil:
+#  - "PC e Hardware" separado de "Eletrônicos": é público próprio (KaBuM), e
+#    quem procura placa de vídeo não quer pulseira de relógio no mesmo filtro.
+#  - "Esporte e Suplementos" junto: creatina/whey é um dos maiores drivers de
+#    oferta no país e atende o mesmo público de artigo esportivo.
+#  - "Celular e Smartwatch" junto: acessório de um puxa a atenção do outro.
+
+_GROUP_MEMBERS: dict[str, list[str]] = {
+    "informatica": ["hardware_pc", "notebook"],
+    "celular": ["smartphone", "acessorio_smartwatch"],
+    "audio": ["fone_headset"],
+    "tv_video": ["tv_monitor"],
+    "games": ["console"],
+    "eletronicos": ["eletronico_acessorio", "eletronico_geral"],
+    "casa_cozinha": [
+        "utensilio_cozinha", "casa_geral", "moveis", "cama_banho",
+        "eletrodomestico_pequeno", "eletrodomestico_grande",
+    ],
+    "moda": [
+        "roupa", "roupa_social", "roupa_esporte", "calcado", "calcado_esporte",
+        "bolsa_mochila", "kit_intimo",
+    ],
+    "beleza": ["perfume", "skincare", "cabelo", "barba", "higiene"],
+    "esporte_suplementos": ["suplemento", "musculacao", "cardio_outdoor", "esporte"],
+    "mercado": [
+        "alimento", "chocolate_doce", "cafe", "condimento", "churrasco",
+        "bebida_alcoolica",
+    ],
+    "ferramentas": ["ferramenta", "ferramenta_eletrica"],
+    "infantil": ["bebe", "brinquedo", "brinquedo_educativo"],
+    "pet": ["pet"],
+    "livros": ["livro", "livro_negocio"],
+}
+
+_CATEGORY_TO_GROUP: dict[str, str] = {
+    categoria: grupo
+    for grupo, categorias in _GROUP_MEMBERS.items()
+    for categoria in categorias
+}
+
+GROUP_FALLBACK = "outros"
+
+
+def group_of(category: str) -> str:
+    """Grupo exibido no site para uma categoria fina."""
+    return _CATEGORY_TO_GROUP.get(category, GROUP_FALLBACK)

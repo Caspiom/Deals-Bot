@@ -23,7 +23,8 @@ _catalog = DealCatalog()
 async def list_deals(
     q: str = Query("", description="Busca por título"),
     store: str = "",
-    category: str = "",
+    group: str = Query("", description="Grupo exibido no site (ver /filters)"),
+    category: str = Query("", description="Categoria fina, mais específica que o grupo"),
     min_discount: int = Query(0, ge=0, le=100),
     max_price: float | None = Query(None, gt=0),
     sort: str = Query("discount", pattern="^(discount|price_asc|price_desc|recent)$"),
@@ -32,7 +33,7 @@ async def list_deals(
 ):
     """Produtos atualmente em promoção. Quem sai de promoção deixa de aparecer."""
     return _catalog.search(
-        q=q, store=store, category=category, min_discount=min_discount,
+        q=q, store=store, category=category, group=group, min_discount=min_discount,
         max_price=max_price, sort=sort, limit=limit, offset=offset,
     )
 
