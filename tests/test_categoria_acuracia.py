@@ -18,7 +18,7 @@ from src.services.category_classifier import classify
 FIXTURE = Path(__file__).parent / "fixtures/categorias_referencia.tsv"
 
 # Piso, não meta. Subir junto com as melhorias; nunca baixar para "passar".
-ACURACIA_MINIMA = 0.70
+ACURACIA_MINIMA = 0.93
 
 
 def carregar() -> list[tuple[str, str]]:

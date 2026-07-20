@@ -6,35 +6,44 @@ from src.models import Deal
 _PATTERNS: list[tuple[str, list[str]]] = [
 
     # ── Eletrônicos ────────────────────────────────────────────────────────────
-    ("console", [
-        r"console|playstation|xbox|nintendo\s*switch|ps[45]\b",
-        r"controle\s*(sem\s*fio|dualsense|dualsense|xbox|ps[45])",
-        r"jogo\s*(de\s*)?(ps[45]|xbox|switch|nintendo)",
-        r"\bvr\b|oculus|meta\s*quest",
-    ]),
     # Antes de smartphone: o acessório cita o aparelho ("suporte para celular",
     # "cabo para iphone") e seria classificado como o próprio celular.
     ("eletronico_acessorio", [
         r"(suporte|capa|película|pelicula|cabo|carregador|adaptador)\s*.{0,25}(celular|iphone|telefone|smartphone|tablet)",
         r"suporte\s*(magnético|magnetico|veicular|de\s*mesa|articulado)",
+        r"(base|suporte)\s*.{0,20}(para\s*)?not(e)?book",
         r"pop\s*socket|anel\s*(de\s*)?suporte",
     ]),
     ("smartphone", [
         r"smartphone|iphone\s*\d|galaxy\s*[asmzf]\d|redmi\s*note|poco\s*[a-z]",
         r"\bcelular\b|motorola\s*(edge|moto\s*g)|xiaomi\s*\d",
     ]),
+    ("hardware_pc", [
+        r"mem[óo]ria\s*(para\s*)?notebook",
+    ]),
     ("notebook", [
         r"notebook|laptop|macbook|ultrabook|chromebook",
     ]),
     ("tv_monitor", [
-        r"\btv\b|televisão|televisor|smart\s*tv|oled|qled|neo\s*qled",
-        r"monitor\s*(gamer|4k|144hz|ultrawide|curvo)?",
+        r"smart\s*tv|televisão|televisor|\btv\s*\d{2}|oled|qled|neo\s*qled",
+        r"monitor\s*(gamer|4k|144hz|ultrawide|curvo|led|ips|full\s*hd)|\bmonitor\s+\d{2}",
         r"\bprojetor\b",
+    ]),
+    # Acessório do fone, não o fone: precisa vir antes.
+    ("eletronico_acessorio", [
+        r"(adaptador|suporte|gancho)\s*.{0,15}(fone|headset|headphone)",
+        r"organizador\s*(de\s*)?cabo|gerenciamento\s*de\s*cabo|protetor\s*de\s*cabo",
     ]),
     ("fone_headset", [
         r"headset|headphone|fone\s*de\s*ouvido|earbuds|airpods|earphone",
-        r"caixa\s*de\s*som|caixa\s*bluetooth|speaker|soundbar|subwoofer",
+        r"caixa\s*de\s*som|caixa\s*bluetooth|speaker|soundbar|subwoofer|alto.?falante",
         r"fone\s*(bluetooth|sem\s*fio|gamer|anc|cancelamento)",
+    ]),
+    ("console", [
+        r"console|playstation|xbox|nintendo\s*switch|ps[45]\b",
+        r"controle\s*(sem\s*fio|dualsense|dualsense|xbox|ps[45])",
+        r"jogo\s*(de\s*)?(ps[45]|xbox|switch|nintendo)",
+        r"\bvr\b|oculus|meta\s*quest",
     ]),
     # Antes de eletronico_acessorio: o acessório de relógio cita "watch"/"smartwatch",
     # que lá casaria com o aparelho em si.
@@ -51,25 +60,31 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"\bprocessador\b(?!\s*de\s*aliment)|placa.?m[ãa]e|placa\s*de\s*v[íi]deo",
         r"mem[óo]ria\s*ram|\bssd\b|\bhdd\b|\bnvme\b|hd\s*externo",
         r"\bgabinete\b|water\s*cooler|air\s*cooler|cooler\s*(para\s*)?(cpu|processador)",
-        r"fonte\s*(atx|modular|\d+\s*w)|pasta\s*térmica",
+        # A marca fica entre "fonte" e a potência: "Fonte Cooler Master ... 850W".
+        r"\bfonte\b.{0,40}(80\s*plus|\batx\b|modular|\d{3,4}\s*w)|pasta\s*térmica",
+        r"\bventoinhas?\b|\bfan\s*\d+\s*mm|\bcooler\s*box",
         r"\brtx\s*\d|\bgtx\s*\d|\bradeon\b|\bgeforce\b|\bryzen\b|core\s*i[3579]\b",
     ]),
     ("eletronico_acessorio", [
         r"\bteclado\b|\bmouse\b|mousepad|\bwebcam\b",
-        r"carregador|power\s*bank|cabo\s*(usb|hdmi|displayport)",
+        r"carregador|power\s*bank|cabo\s*(usb|hdmi|displayport|de\s*dados|tipo\s*c|lightning)",
+        r"filtro\s*de\s*linha|estabilizador\b|\bnobreak\b|r[ée]gua\s*de\s*tomada",
+        r"mesa\s*digitalizadora|rastreador\s*(gps|bluetooth)|air\s*?tags?\b",
         r"adaptador|hub\s*usb|switch\s*hdmi",
         r"smartwatch|relógio\s*inteligente|band\s*\d|mi\s*band",
         r"impressora|scanner|cartucho|toner",
         # 'wi-fi' solto é característica, não produto: capturava câmera de
         # segurança, impressora e TV. Os termos ao lado já cobrem o roteador.
-        r"roteador|\bmodem\b|repetidor\s*(de\s*)?sinal|\bmesh\b",
+        r"roteador|\bmodem\b|repetidor\s*(de\s*)?sinal|(wi.?fi|sistema|rede)\s*mesh",
     ]),
     # Componentes de PC saíram para hardware_pc, que roda antes. O 'processador'
     # solto aqui capturava "processador de alimentos" antes do eletrodoméstico.
     ("eletronico_geral", [
         r"tablet|ipad|\bkindle\b",
         r"\bpc\b\s*gamer|computador\s*(completo|gamer)?|desktop",
-        r"pendrive|cart[ãa]o\s*(de\s*)?mem[óo]ria",
+        r"pen\s*drive|pendrive|cart[ãa]o\s*(de\s*)?mem[óo]ria",
+        r"echo\s*(show|dot|pop)|smart\s*(speaker|display)",
+        r"fire\s*tv|chromecast|tv\s*box|streaming\s*stick|apple\s*tv",
         r"\bcâmera\b|\bcamera\b|gopro|\bdrone\b",
     ]),
 
@@ -115,32 +130,6 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     ]),
 
     # ── Casa ──────────────────────────────────────────────────────────────────
-    ("eletrodomestico_grande", [
-        r"geladeira|refrigerador|freezer",
-        r"fogão|\bcooktop\b|forno\s*(elétrico|de\s*embutir)",
-        r"máquina\s*de?\s*(lavar|secar)|lava.?(louça|roupas?)",
-        r"ar\s*condicionado|\bsplit\b",
-    ]),
-    ("eletrodomestico_pequeno", [
-        r"fritadeira\s*air|air\s*fryer|airfryer",
-        r"liquidificador|batedeira|processador\s*de\s*alimento|\bmixer\b",
-        r"micro.?ondas",
-        r"ventilador|climatizador|purificador\s*de\s*ar",
-        r"aspirador|robô\s*(de\s*)?(limpeza|aspirador)",
-        r"sanduicheira|wafleira|\bgrill\b|churraqueira\s*elétrica",
-    ]),
-    ("cama_banho", [
-        r"colchão|travesseiro|edredom|lençol|cobre.?leito|roupa\s*de\s*cama",
-        r"\btoalha\b|jogo\s*de\s*toalha|roupão",
-        r"cama\s*(box|casal|solteiro|queen|king)",
-    ]),
-    ("moveis", [
-        r"sofá|sofa|poltrona|\bpuff\b",
-        r"armário|guarda.?roupa|estante|prateleira|\brack\b|\bnicho\b",
-        r"mesa\s*(de\s*)?(jantar|escritório|estudo)|escrivaninha|bancada",
-        r"cadeira\s*(escritório|gamer|de\s*jantar)|cadeira\s*de\s*escritório",
-        r"\bcama\b(?!\s*(de\s*)?(box|casal|queen|king|solteiro))",
-    ]),
     ("bebe", [
         r"\bfralda\b|fralda\s*(descartável|pano|bebe|baby)",
         r"lenço\s*umedecido|toalha\s*umedecida",
@@ -156,12 +145,45 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     ("utensilio_cozinha", [
         r"panela|frigideira|\bwok\b|caldeirão|caçarola",
         r"chaleira|\bcafeteira\b|french\s*press|aeropress",
-        r"pote|tupperware|\bmarmita\b|pote\s*hermet",
+        r"potes?\s*(herm[ée]tico|de\s*vidro|pl[áa]stico|t[ée]rmico)|tupperware|\bmarmita\b",
         r"\bcopo\b|\bcaneca\b|\bprato\b|tigela|jogo\s*(de\s*)?(cozinha|prato|copo|jantar)",
         r"\bfaca\b|tábua\s*de\s*corte|espátula",
+        r"fatiador|amaciador\s*de\s*carne|\bmolde\b|forma\s*de\s*(bolo|gelo|biscoito)",
+        r"m[áa]quina\s*de\s*selagem|seladora\b|selagem\s*(de\s*)?saco",
+        r"triturador|picador\s*(de\s*)?alho|amassador|espremedor",
+        r"abridor\s*(de\s*)?(garrafa|lata)|descascador|ralador|\bmoedor\b|spice\s*grinder",
+    ]),
+    ("eletrodomestico_grande", [
+        r"geladeira|refrigerador|freezer",
+        r"fogão|\bcooktop\b|forno\s*(elétrico|de\s*embutir)",
+        r"máquina\s*de?\s*(lavar|secar)|lava.?(louça|roupas?)",
+        r"ar\s*condicionado|\bsplit\b",
+    ]),
+    ("eletrodomestico_pequeno", [
+        r"fritadeira\s*air|air\s*fryer|airfryer",
+        r"liquidificador|batedeira|processador\s*de\s*alimento|\bmixer\b",
+        r"micro.?ondas",
+        r"ventilador|climatizador|purificador\s*de\s*ar",
+        r"aspirador|robô\s*(de\s*)?(limpeza|aspirador)",
+        r"sanduicheira|wafleira|\bgrill\b|churraqueira\s*elétrica",
+        r"panificadora|máquina\s*de\s*p[ãa]o|cafeteira\s*el[ée]trica",
+    ]),
+    ("cama_banho", [
+        r"colchão|travesseiro|edredom|lençol|cobre.?leito|roupa\s*de\s*cama",
+        r"\btoalha\b|jogo\s*de\s*toalha|roupão",
+        r"cama\s*(box|casal|solteiro|queen|king)",
+    ]),
+    ("moveis", [
+        r"sofá|sofa|poltrona|\bpuff\b",
+        r"armário|guarda.?roupa|estante|prateleira|\brack\b|\bnicho\b",
+        r"mesa\s*(de\s*)?(jantar|escritório|estudo)|escrivaninha|bancada",
+        r"cadeira\s*(de\s*)?(escritório|escritorio|office|gamer|jantar)",
+        r"mesa\s*(office|gamer|de\s*trabalho)|apoio\s*(ergonômico|para\s*os?\s*p[ée]s)",
+        r"\bcama\b(?!\s*(de\s*)?(box|casal|queen|king|solteiro))",
     ]),
     ("casa_geral", [
-        r"luminária|abajur|pendente|lustre|fita\s*led",
+        r"luminária|abajur|pendente|lustre|fita\s*led|tira\s*(de\s*)?led",
+        r"l[âa]mpada|luz\s*(noturna|led|de\s*tira|solar)|ilumina[çc][ãa]o|sensor\s*de\s*movimento",
         r"tapete|cortina|persiana|almofada|decoração",
         r"caixa\s*organizadora|organizador|cesto|cabide",
         r"\bquadro\b|\bespelho\b|\bvaso\b|\bplanta\b",
@@ -274,6 +296,10 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"parafusadeira\s*(a\s*bateria|sem\s*fio)",
     ]),
     ("ferramenta", [
+        r"\blanterna\b|tocha\s*tática|luz\s*de\s*trabalho",
+        r"escova\s*de\s*(arame|aço)|pulverizador|pistola\s*de\s*pintura",
+        r"chave\s*(de\s*impacto|de\s*fenda|philips|allen|inglesa)|soquete\b",
+        r"pin[çc]a\s*(de\s*precis[ãa]o)?|tweezer|extrator\b|picareta\b",
         r"\bmartelo\b|chave\s*de?\s*fenda|chave\s*combinada|\balicate\b|\btorquesa\b|chave\s*inglesa",
         r"kit\s*(de\s*)?ferramenta|conjunto\s*(de\s*)?ferramenta|maleta\s*(de\s*)?ferramenta",
         r"extensão\s*elétrica|tomada\s*(múltipla|tripla)|régua\s*(elétrica|filtro)",
@@ -301,6 +327,7 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"jogo\s*de\s*tabuleiro|card\s*game|\brpg\b|\buno\b|monopoly|\bdetetive\b",
     ]),
     ("brinquedo", [
+        r"figurinhas?\b|\bcromos?\b|álbum\s*(da\s*)?copa|blister\s*.{0,20}figurinha",
         r"\bbrinquedo\b|\bboneca\b|\bboneco\b",
         r"carrinho\s*(de\s*)?brinquedo|pista\s*de\s*corrida|hot\s*wheels",
         r"\bpelúcia\b|\bursinho\b",

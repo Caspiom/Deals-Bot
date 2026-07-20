@@ -151,3 +151,44 @@ def test_smartwatch_device_is_not_accessory():
 def test_wifi_alone_does_not_imply_router():
     """'Wi-Fi' é característica; capturava câmera, impressora e TV."""
     assert classify(_deal("TP-Link Tapo C500 Câmera de Segurança Wifi 1080P")) == "eletronico_geral"
+
+
+# ── vocabulário: termos que caíam em 'geral' ─────────────────────────────────
+
+@pytest.mark.parametrize(
+    "titulo,esperado",
+    [
+        ("Fonte Cooler Master MWE Gold 850 V3, 850W, 80 Plus Ouro, ATX 3.1", "hardware_pc"),
+        ("Kit com 3 Ventoinhas Corsair RS120 ARGB, 120mm, PWM", "hardware_pc"),
+        ("Memória Para Notebook Adata XPG, 16GB, DDR5", "hardware_pc"),
+        ("Lâmpada com Sensor de Movimento Luz Noturna LED", "casa_geral"),
+        ("Mini máquina de selagem usb recarregável", "utensilio_cozinha"),
+        ("Nova cozinha multifuncional triturador de alho manual", "utensilio_cozinha"),
+        ("Abridor de garrafas multifuncional ajustável", "utensilio_cozinha"),
+        ("Kit 350 Figurinhas Do Álbum Copa Do Mundo 2026", "brinquedo"),
+        ("Lanterna de trabalho LED dobrável recarregável COB", "ferramenta"),
+        ("Panificadora Automática Master Bread, Mondial, 700W", "eletrodomestico_pequeno"),
+        ("Pen Drive 128GB Kingston DataTraveler, USB 3.2", "eletronico_geral"),
+        ("Portátil sem fio bluetooth alto-falante led luz ipx4", "fone_headset"),
+    ],
+)
+def test_vocabulario_expandido(titulo, esperado):
+    assert classify(_deal(titulo)) == esperado
+
+
+@pytest.mark.parametrize(
+    "titulo,esperado",
+    [
+        # Termo genérico não pode roubar o produto principal: são características.
+        ("Ar Condicionado Portátil KABUM 12000 BTUs, Controle via App, Alexa", "eletrodomestico_grande"),
+        ("Monitor Gamer Gigabyte 25\" FHD 200Hz IPS, Alto-falante Embutido", "tv_monitor"),
+        ("Cadeira Escritório Ergonômica Genebra B500, Estofado Mesh", "moveis"),
+        ("Smartwatch masculino relógio de pulso mensagem monitor de sono", "eletronico_acessorio"),
+        ("Kit 10 Pote De Vidro Marmita Hermético 370ml Freezer Fitness", "utensilio_cozinha"),
+        ("Creatina Monohidratada em Pote 300g 100% Pura", "suplemento"),
+        ("Fone de Ouvido Gamer HyperX Cloud Earbuds II, Nintendo Switch", "fone_headset"),
+        ("Base com Cooler para Notebook Rise Mode, Galaxy Black X4", "eletronico_acessorio"),
+    ],
+)
+def test_caracteristica_nao_rouba_produto(titulo, esperado):
+    assert classify(_deal(titulo)) == esperado
