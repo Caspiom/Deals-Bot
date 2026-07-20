@@ -34,3 +34,4 @@ build/
 *.egg-info/
 data/backups/
 data/*.corrompido
+logs/caddy/

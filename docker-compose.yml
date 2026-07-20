@@ -23,8 +23,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-    # API_BIND=127.0.0.1 (padrão) só aceita conexão local — para a Vercel
-    # alcançar a API, use 0.0.0.0 e proteja com API_TOKEN.
+    # Só local: quem fala com a internet é o Caddy, que faz o TLS. Publicar a
+    # porta 8000 daria um caminho em HTTP puro contornando o certificado.
     ports:
       - "${API_BIND:-127.0.0.1}:8000:8000"
     restart: unless-stopped
@@ -35,3 +35,29 @@ services:
       interval: 60s
       timeout: 5s
       retries: 3
+
+  # HTTPS com Let's Encrypt automático. Só sobe com o perfil "https", para não
+  # atrapalhar o desenvolvimento local (onde não há domínio para validar):
+  #   docker compose --profile https up -d
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    ports:
+      - "80:80"     # exigida pelo desafio do Let's Encrypt, mesmo usando só 443
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?defina API_DOMAIN no .env}
+      ACME_EMAIL: ${ACME_EMAIL:?defina ACME_EMAIL no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # guarda o certificado: sem isto, cada restart
+      - caddy_config:/config  # pede um novo e esbarra no limite do Let's Encrypt
+      - ./logs/caddy:/var/log/caddy
+    depends_on:
+      - api
+
+volumes:
+  caddy_data:
+  caddy_config:

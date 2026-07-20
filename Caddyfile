@@ -1,0 +1,32 @@
+# Caddy obtém e renova o certificado Let's Encrypt sozinho — sem certbot, sem
+# cron de renovação. Basta o domínio apontar para esta máquina e as portas
+# 80 e 443 estarem abertas.
+#
+# A porta 80 é obrigatória mesmo usando só HTTPS: é por ela que o Let's Encrypt
+# valida que você controla o domínio (desafio HTTP-01).
+
+{$API_DOMAIN} {
+	# E-mail para avisos de expiração do Let's Encrypt.
+	tls {$ACME_EMAIL}
+
+	# A API não escuta na internet: só o Caddy fala com ela, pela rede interna
+	# do Docker.
+	reverse_proxy api:8000
+
+	encode gzip
+
+	header {
+		# HSTS: navegador passa a exigir HTTPS neste domínio.
+		Strict-Transport-Security "max-age=31536000;"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
