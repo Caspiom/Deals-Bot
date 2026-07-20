@@ -63,6 +63,20 @@ O Caddy emite e **renova** o certificado sozinho. Não há certbot nem cron —
 mas a ordem importa: o Let's Encrypt precisa confirmar que você controla o
 domínio, então DNS e portas têm que estar prontos **antes** de subir o Caddy.
 
+### 2.0 Tornar o IP reservado (antes de apontar o DNS)
+
+O IP que a Oracle atribui na criação da instância é **efêmero**: muda se a
+máquina for parada e iniciada. Como o domínio e o certificado vão depender
+dele, converta para reservado **antes** de configurar o DNS — senão um
+restart derruba o site e invalida a validação do Let's Encrypt.
+
+Console → **Networking** → **IP Management** → **Reserved public IPs** →
+`Reserve public IP address`. Depois, na instância: **Attached VNICs** →
+clique na VNIC → **IPv4 Addresses** → editar o IP público → trocar de
+*Ephemeral* para *Reserved*.
+
+Confirme que o IP continua o mesmo antes de seguir.
+
 ### 2.1 Apontar o subdomínio
 
 No painel do seu domínio, criar um registro:
