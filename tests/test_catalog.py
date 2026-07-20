@@ -120,3 +120,30 @@ def test_purge_removes_long_expired(catalog):
     catalog.upsert_many([d])
     _age(catalog, d, minutes=10_000_000)
     assert catalog.purge_expired() == 1
+
+
+# ── categoria acompanha o título ─────────────────────────────────────────────
+
+def test_upsert_refreshes_category(catalog):
+    """Categoria é derivada do título: congelá-la prende o produto na
+    classificação do primeiro ciclo, mesmo depois do título melhorar."""
+    generic = _deal(title="Produto sem termo reconhecível")
+    catalog.upsert_many([generic])
+    assert catalog.get(deal_id(generic))["category"] == "geral"
+
+    # mesmo produto (mesma url → mesmo id), agora com título identificável
+    improved = _deal(title="Produto sem termo reconhecível")
+    improved.raw_title = "Fone de ouvido bluetooth sem fio"
+    catalog.upsert_many([improved])
+    assert catalog.get(deal_id(improved))["category"] == "fone_headset"
+
+
+def test_upsert_refreshes_tax_note(catalog):
+    d = _deal()
+    catalog.upsert_many([d])
+    assert catalog.get(deal_id(d))["tax_note"] is None
+
+    with_note = _deal()
+    with_note.tax_note = "🌐 Preço com impostos incluídos"
+    catalog.upsert_many([with_note])
+    assert catalog.get(deal_id(with_note))["tax_note"] == "🌐 Preço com impostos incluídos"

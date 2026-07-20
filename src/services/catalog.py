@@ -85,6 +85,10 @@ class DealCatalog:
                 image_url, store, source, category, installments, installment_value,
                 coupon_code, tax_note, first_seen_at, last_seen_at
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            -- Tudo que é derivado do deal coletado precisa ser reescrito: a
+            -- categoria é função do título, e congelá-la enquanto o título muda
+            -- deixa o produto preso na classificação do primeiro ciclo.
+            -- Só first_seen_at é preservado.
             ON CONFLICT(id) DO UPDATE SET
                 title             = excluded.title,
                 url               = excluded.url,
@@ -93,9 +97,13 @@ class DealCatalog:
                 old_price         = excluded.old_price,
                 discount_pct      = excluded.discount_pct,
                 image_url         = excluded.image_url,
+                store             = excluded.store,
+                source            = excluded.source,
+                category          = excluded.category,
                 installments      = excluded.installments,
                 installment_value = excluded.installment_value,
                 coupon_code       = excluded.coupon_code,
+                tax_note          = excluded.tax_note,
                 last_seen_at      = excluded.last_seen_at
             """,
             rows,
