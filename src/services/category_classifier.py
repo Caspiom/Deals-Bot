@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from src.models import Deal
 
 # A ORDEM IMPORTA: mais específico antes do genérico da mesma família.
@@ -103,6 +104,18 @@ _PATTERNS: list[tuple[str, list[str]]] = [
         r"cadeira\s*(escritório|gamer|de\s*jantar)|cadeira\s*de\s*escritório",
         r"cama\b(?!\s*(de\s*)?(box|casal|queen|king|solteiro))",
     ]),
+    ("bebe", [
+        r"fralda\b|fralda\s*(descartável|pano|bebe|baby)",
+        r"lenço\s*umedecido|toalha\s*umedecida",
+        r"pomada\s*(assadur|frald|bebê|baby)|bepantol",
+        r"shampoo\s*\w*\s*(baby|infantil)|condicionador\s*\w*\s*(baby|infantil)",
+        r"johnson\s*baby|huggies\b|pampers\b|pequeno\s*príncipe",
+        r"banheira\s*(infantil|bebê|baby)|banheirinha",
+        r"mamadeira\b|chupeta\b|mordedor\s*(bebê|baby)|babador\b",
+        r"berço\b|carrinho\s*de\s*bebê|cadeirinha\s*(bebê|carro|auto)",
+        r"monitor\s*(de\s*bebê|baby)|babá\s*eletrônica",
+        r"andador\b|bebê\s*conforto|moisés\b",
+    ]),
     ("utensilio_cozinha", [
         r"panela|frigideira|wok\b|caldeirão|caçarola",
         r"chaleira|cafeteira\b|french\s*press|aeropress",
@@ -161,18 +174,6 @@ _PATTERNS: list[tuple[str, list[str]]] = [
     ]),
 
     # ── Bebê ──────────────────────────────────────────────────────────────────
-    ("bebe", [
-        r"fralda\b|fralda\s*(descartável|pano|bebe|baby)",
-        r"lenço\s*umedecido|toalha\s*umedecida",
-        r"pomada\s*(assadur|frald|bebê|baby)|bepantol",
-        r"shampoo\s*\w*\s*(baby|infantil)|condicionador\s*\w*\s*(baby|infantil)",
-        r"johnson\s*baby|huggies\b|pampers\b|pequeno\s*príncipe",
-        r"banheira\s*(infantil|bebê|baby)|banheirinha",
-        r"mamadeira\b|chupeta\b|mordedor\s*(bebê|baby)|babador\b",
-        r"berço\b|carrinho\s*de\s*bebê|cadeirinha\s*(bebê|carro|auto)",
-        r"monitor\s*(de\s*bebê|baby)|babá\s*eletrônica",
-        r"andador\b|bebê\s*conforto|moisés\b",
-    ]),
 
     # ── Beleza e Higiene ──────────────────────────────────────────────────────
     ("perfume", [
@@ -280,12 +281,67 @@ _PATTERNS: list[tuple[str, list[str]]] = [
 ]
 
 
+# ── Normalização ──────────────────────────────────────────────────────────────
+# Títulos de loja são inconsistentes em acento e número ("Fone" vs "Fones",
+# "vídeo" vs "video"). Normalizar os DOIS lados — texto e padrão — resolve a
+# classe inteira de falhas, em vez de duplicar cada regex.
+
+
+def _strip_accents(text: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
+    )
+
+
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", _strip_accents(text.lower())).strip()
+
+
+# Singulares que já terminam em -s: singularizar produziria lixo ("tenis" → "teni").
+_INVARIANT = frozenset({
+    "tenis", "lapis", "onibus", "virus", "atlas", "bonus", "status", "gas",
+    "mes", "pais", "arroz", "couros", "jeans", "fitness", "wireless", "plus",
+    "bass", "class", "cross", "press", "gloss", "dress", "pcs", "pes",
+})
+
+
+def _singularize_word(word: str) -> str:
+    if len(word) <= 3 or word in _INVARIANT:
+        return word
+    for suffix, replacement in (
+        ("oes", "ao"), ("aes", "ao"), ("ais", "al"),
+        ("eis", "el"), ("ois", "ol"), ("ns", "m"),
+    ):
+        if word.endswith(suffix):
+            return word[: -len(suffix)] + replacement
+    if word.endswith(("res", "zes", "ses")):
+        return word[:-2]
+    if word.endswith("s"):
+        return word[:-1]
+    return word
+
+
+def _singularize(text: str) -> str:
+    return " ".join(_singularize_word(w) for w in text.split(" "))
+
+
+# Padrões compilados uma vez, já normalizados, preservando a ordem de precedência.
+_COMPILED: list[tuple[str, list[re.Pattern[str]]]] = [
+    (category, [re.compile(normalize(p)) for p in patterns])
+    for category, patterns in _PATTERNS
+]
+
+
 def classify(deal: Deal) -> str:
     # Usa o título original quando existe: a limpeza para exibição corta as
     # cláusulas finais, que é justamente onde costuma estar o termo do produto.
-    title = deal.text_for_matching().lower()
-    for category, patterns in _PATTERNS:
+    title = normalize(deal.text_for_matching())
+    # Casa contra as duas formas: a singularização é heurística, então serve para
+    # ganhar recall sem poder remover um acerto que a forma original já daria.
+    singular = _singularize(title)
+
+    for category, patterns in _COMPILED:
         for pattern in patterns:
-            if re.search(pattern, title):
+            if pattern.search(title) or pattern.search(singular):
                 return category
     return "geral"
