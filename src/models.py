@@ -23,6 +23,14 @@ class Deal:
     # Chave estável para dedup quando `url` muda a cada coleta (ex: promotion_link
     # do AliExpress, gerado novo a cada chamada da API). Vazio = usa `url`.
     dedup_key: str = ""
+    # Título como veio da loja, antes de qualquer limpeza para exibição.
+    # Classificação e busca querem o máximo de palavras; o usuário quer o mínimo.
+    # Vazio = `title` já é o original.
+    raw_title: str = ""
+
+    def text_for_matching(self) -> str:
+        """Texto mais rico disponível para classificar o produto."""
+        return self.raw_title or self.title
 
     def key(self) -> str:
         """Identidade estável do produto — base do dedup e do id no catálogo.

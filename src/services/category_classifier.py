@@ -281,7 +281,9 @@ _PATTERNS: list[tuple[str, list[str]]] = [
 
 
 def classify(deal: Deal) -> str:
-    title = deal.title.lower()
+    # Usa o título original quando existe: a limpeza para exibição corta as
+    # cláusulas finais, que é justamente onde costuma estar o termo do produto.
+    title = deal.text_for_matching().lower()
     for category, patterns in _PATTERNS:
         for pattern in patterns:
             if re.search(pattern, title):

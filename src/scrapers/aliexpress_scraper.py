@@ -221,6 +221,7 @@ class AliExpressScraper(BaseScraper):
                 title = str(p.get("product_title", "")).strip()
                 deals.append(Deal(
                     title=_clean_title(title),
+                    raw_title=title,
                     url=url,
                     price=price,
                     old_price=old_price if old_price and old_price > price else None,
